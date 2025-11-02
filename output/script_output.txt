@@ -1,0 +1,147 @@
+
+
+================================================================================
+               FINS3666 - HG COPPER FUTURES BACKTEST
+                    3-Factor Regression Strategy
+================================================================================
+
+Output is being saved to: output/script_output.txt
+
+Backtest Period: 2025-01-02 to 2025-06-30
+Data Loading Period: 2022-12-14 to 2025-06-30
+  (Need ~2 years of history for rolling regression)
+Initial Equity: $10,000,000
+
+================================================================================
+LOADING AND PREPROCESSING DATA
+================================================================================
+
+[1/4] Loading DXY data...
+   ✓ Loaded 1214 DXY observations
+   ✓ Date range: 2021-01-04 to 2025-10-31
+
+[2/4] Loading PMI data...
+   ✓ Loaded 58 monthly PMI observations
+   ⟳ Interpolating monthly PMI to daily...
+   ✓ Interpolated to 1737 daily observations
+
+[3/4] Loading HG Copper futures data...
+   ✓ Loaded 1214 HG observations
+   ✓ Date range: 2021-01-04 to 2025-10-31
+
+[4/4] Loading LME copper stocks data...
+   ✓ Loaded 1214 LME observations
+   ✓ Date range: 2021-01-04 to 2025-10-31
+
+[5/5] Merging all datasets...
+   ✓ Merged dataset: 636 observations
+   ✓ Backtest period: 2022-12-14 to 2025-06-30
+   ✓ Features: ['Date', 'HG_Price', 'HG1_logret', 'DXY_Price', 'DXY_logret', 'PMI', 'PMI_change', 'LME_Stocks', 'STOCKS_logret']
+
+[DATA QUALITY CHECK]
+   Missing values per column:
+      Date: 0
+      HG_Price: 0
+      HG1_logret: 0
+      DXY_Price: 0
+      DXY_logret: 0
+      PMI: 0
+      PMI_change: 0
+      LME_Stocks: 0
+      STOCKS_logret: 0
+
+================================================================================
+
+[DATA AVAILABILITY CHECK]
+   Days loaded: 636
+   Days needed for regression: 504
+   ✓ Sufficient data available
+
+================================================================================
+GENERATING TRADING SIGNALS (3-FACTOR REGRESSION)
+================================================================================
+
+Regression window: 504 days (~2.0 years)
+Signal threshold: ±0.1%
+Generating signals from: 2025-01-02
+
+Training period ends at index: 513 (2024-12-31)
+Signal generation starts at index: 514 (2025-01-02)
+Total signals to generate: 122
+
+Running rolling regression...
+   Progress: 0.8% (1/122 days)   Progress: 41.8% (51/122 days)   Progress: 82.8% (101/122 days)
+   ✓ Generated 122 trading signals
+
+[SIGNAL DISTRIBUTION]
+   LONG:      79 ( 64.8%)
+   SHORT:     11 (  9.0%)
+   NEUTRAL:   32 ( 26.2%)
+   TOTAL:    122 (100.0%)
+
+[MODEL STATISTICS]
+   Average R²: 0.0511
+   Median R²:  0.0484
+   Average |Forecast|: 0.2218%
+   Max forecast: +0.8346%
+   Min forecast: -0.3776%
+
+[AVERAGE BETA COEFFICIENTS]
+   β₁ (DXY):    -0.105211
+   β₂ (PMI):    +2.965623
+   β₃ (STOCKS): -0.098106
+
+[INTERPRETATION]
+   ✓ Copper falls when USD strengthens (β₁ < 0)
+   ✓ Copper rises with Chinese PMI (β₂ > 0)
+   ✓ Copper falls when inventories rise (β₃ < 0)
+================================================================================
+
+✓ Backtest data with signals saved to: output/backtest_signals.csv
+
+================================================================================
+SAMPLE OF GENERATED SIGNALS
+================================================================================
+
+[FIRST 5 TRADING DAYS]
+      Date  HG_Price  Forecasted_Return  Signal  Model_R2
+2025-01-02      6.48          -0.046670 NEUTRAL  0.046095
+2025-01-03      6.57           0.066748 NEUTRAL  0.045522
+2025-01-06      6.66           0.141368    LONG  0.045240
+2025-01-07      6.72           0.030199 NEUTRAL  0.045682
+2025-01-08      6.86          -0.061304 NEUTRAL  0.048501
+
+[LAST 5 TRADING DAYS]
+      Date  HG_Price  Forecasted_Return  Signal  Model_R2
+2025-06-24      7.49           0.626181    LONG  0.042499
+2025-06-25      7.66           0.187053    LONG  0.040478
+2025-06-26      7.82           0.373819    LONG  0.040631
+2025-06-27      7.85           0.053816 NEUTRAL  0.042763
+2025-06-30      7.76           0.392150    LONG  0.042650
+
+[RECENT NON-NEUTRAL SIGNALS]
+      Date  HG_Price  Forecasted_Return Signal  Model_R2
+2025-06-12      7.41           0.258821   LONG  0.043164
+2025-06-13      7.41           0.192863   LONG  0.043078
+2025-06-16      7.39           0.372860   LONG  0.043569
+2025-06-17      7.39           0.514756   LONG  0.043979
+2025-06-20      7.47           0.371995   LONG  0.041751
+2025-06-23      7.54           0.420307   LONG  0.041890
+2025-06-24      7.49           0.626181   LONG  0.042499
+2025-06-25      7.66           0.187053   LONG  0.040478
+2025-06-26      7.82           0.373819   LONG  0.040631
+2025-06-30      7.76           0.392150   LONG  0.042650
+
+================================================================================
+DATA LOADING AND SIGNAL GENERATION COMPLETE
+================================================================================
+
+Next steps:
+1. ✓ Load and preprocess market data
+2. ✓ Implement signal generation (3-factor regression)
+3. ⧗ Implement position sizing with carry filter
+4. ⧗ Implement risk management (ATR stops)
+5. ⧗ Run backtest simulation
+6. ⧗ Analyze results
+
+
