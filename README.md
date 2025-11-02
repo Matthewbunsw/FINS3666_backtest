@@ -10,7 +10,7 @@
 
 1. Clone the repository:
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Matthewbunsw/FINS666_backtest.git
 cd FINS3666_backtest
 ```
 
