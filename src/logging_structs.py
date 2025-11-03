@@ -62,7 +62,7 @@ class Position:
     net_pnl: float = 0.0  # Net P&L after costs
     
     # Exit reason tracking
-    exit_reason: Optional[str] = None  # "SIGNAL_REVERSAL", "STOP_LOSS", "ROLL", "END_OF_BACKTEST"
+    exit_reason: Optional[str] = None  # "SIGNAL_REVERSAL", "STOP_LIMIT_FILLED", "STOP_LIMIT_NOT_FILLED", "ROLL", "END_OF_BACKTEST"
     
     # Position metrics
     holding_days: int = 0

@@ -51,6 +51,7 @@ from config import (
     BACKTEST_START,
     BACKTEST_END,
     INITIAL_EQUITY,
+    STOP_LIMIT_ENABLED,
     DXY_FILE,
     PMI_FILE,
     HG_FRONT_FILE,
@@ -624,6 +625,41 @@ def apply_carry_filter(signal, carry_spread):
     return 0.0
 
 
+def calculate_limit_band(avg_overnight_spread):
+    """
+    Calculate the limit band for stop-limit orders
+    
+    Args:
+        avg_overnight_spread: float (average overnight spread in $/lb)
+    
+    Returns:
+        limit_band: float ($/lb) - maximum distance from stop price to still fill
+    
+    Logic per trading plan:
+        "Limit band = max(4 ticks, 1.5 × average overnight spread)"
+        - Minimum: 4 ticks = 4 × $0.0005 = $0.002/lb
+        - Dynamic: 1.5 × avg overnight spread
+        - Take the larger of these two values
+    """
+    from config import STOP_LIMIT_BAND_TICKS, STOP_LIMIT_BAND_MULTIPLIER
+    
+    # Calculate minimum band (4 ticks)
+    tick_size = 0.0005  # $0.0005/lb
+    min_band = STOP_LIMIT_BAND_TICKS * tick_size  # 4 × $0.0005 = $0.002
+    
+    # Calculate dynamic band (1.5 × avg overnight spread)
+    if pd.notna(avg_overnight_spread) and avg_overnight_spread > 0:
+        dynamic_band = STOP_LIMIT_BAND_MULTIPLIER * avg_overnight_spread
+    else:
+        # If avg overnight spread is missing, default to min band
+        dynamic_band = min_band
+    
+    # Return the larger of the two
+    limit_band = max(min_band, dynamic_band)
+    
+    return limit_band
+
+
 # ============================================================================
 # PHASE 3: POSITION SIZING & RISK MANAGEMENT
 # ============================================================================
@@ -1132,55 +1168,89 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                         stop_triggered = True
             
             if stop_triggered:
-                # Stop was triggered intraday - exit at settlement price (end of day)
-                # This is more realistic than assuming exact stop price execution
-                exit_trade = Trade(
-                    trade_id=trade_id_counter,
-                    date=current_date,
-                    action="CLOSE_LONG" if direction == "LONG" else "CLOSE_SHORT",
-                    contract_code=current_m2_contract,
-                    price=m2_settlement,  # Exit at settlement, not exact stop price
-                    num_contracts=current_position.entry_trade.num_contracts
-                )
-                trade_id_counter += 1
+                # Stop was triggered intraday
+                # Now check if we can fill at settlement using stop-limit logic
                 
-                current_position.exit_trade = exit_trade
-                current_position.exit_reason = "STOP_LOSS"
-                current_position.calculate_pnl()
-                results.positions.append(current_position)
+                exit_filled = True  # Default: assume stop-market behavior (always fills)
+                exit_reason = "STOP_LIMIT_FILLED"
                 
-                # Update equity
-                equity += current_position.net_pnl
+                if STOP_LIMIT_ENABLED:
+                    # Calculate limit band using average overnight spread
+                    limit_band = calculate_limit_band(m2_avg_overnight_spread)
+                    
+                    # Check if settlement price is within acceptable limit band
+                    if direction == "LONG":
+                        # For LONG: stop triggered if price fell to/below stop
+                        # Check if settlement didn't gap too far below stop price
+                        if m2_settlement < (stop_price - limit_band):
+                            # Settlement is beyond limit band - order doesn't fill
+                            exit_filled = False
+                            exit_reason = "STOP_LIMIT_NOT_FILLED"
+                    
+                    elif direction == "SHORT":
+                        # For SHORT: stop triggered if price rose to/above stop
+                        # Check if settlement didn't gap too far above stop price
+                        if m2_settlement > (stop_price + limit_band):
+                            # Settlement is beyond limit band - order doesn't fill
+                            exit_filled = False
+                            exit_reason = "STOP_LIMIT_NOT_FILLED"
                 
-                # Reset state
-                position_status = PositionStatus.FLAT
-                current_position = None
-                entry_price = None
-                entry_direction = None
+                # Only execute exit if stop-limit order would have filled
+                if exit_filled:
+                    # Exit at settlement price (end of day)
+                    exit_trade = Trade(
+                        trade_id=trade_id_counter,
+                        date=current_date,
+                        action="CLOSE_LONG" if direction == "LONG" else "CLOSE_SHORT",
+                        contract_code=current_m2_contract,
+                        price=m2_settlement,
+                        num_contracts=current_position.entry_trade.num_contracts
+                    )
+                    trade_id_counter += 1
+                    
+                    current_position.exit_trade = exit_trade
+                    current_position.exit_reason = exit_reason
+                    current_position.calculate_pnl()
+                    results.positions.append(current_position)
+                    
+                    # Update equity
+                    equity += current_position.net_pnl
+                    
+                    # Reset state
+                    position_status = PositionStatus.FLAT
+                    current_position = None
+                    entry_price = None
+                    entry_direction = None
+                    
+                    # Log daily metrics and continue
+                    realized_pnl_value = current_position.net_pnl if current_position else 0.0
+                    daily_metric = DailyMetrics(
+                        date=current_date,
+                        position_status=position_status,
+                        num_contracts=0,
+                        current_price=m2_settlement,
+                        signal=current_signal,
+                        forecasted_return=forecasted_return,
+                        atr=m2_atr,
+                        stop_loss=None,
+                        carry_spread=carry_spread,
+                        carry_multiplier=0.0,
+                        unrealized_pnl=0.0,
+                        realized_pnl=realized_pnl_value,
+                        roll_pnl=0.0,
+                        daily_total_pnl=realized_pnl_value,
+                        cumulative_pnl=equity - initial_equity,
+                        equity=equity
+                    )
+                    results.daily_metrics.append(daily_metric)
+                    
+                    continue  # Skip to next day
                 
-                # Log daily metrics and continue
-                realized_pnl_value = current_position.net_pnl if current_position else 0.0
-                daily_metric = DailyMetrics(
-                    date=current_date,
-                    position_status=position_status,
-                    num_contracts=0,
-                    current_price=m2_settlement,
-                    signal=current_signal,
-                    forecasted_return=forecasted_return,
-                    atr=m2_atr,
-                    stop_loss=None,
-                    carry_spread=carry_spread,
-                    carry_multiplier=0.0,
-                    unrealized_pnl=0.0,
-                    realized_pnl=realized_pnl_value,
-                    roll_pnl=0.0,
-                    daily_total_pnl=realized_pnl_value,
-                    cumulative_pnl=equity - initial_equity,
-                    equity=equity
-                )
-                results.daily_metrics.append(daily_metric)
-                
-                continue  # Skip to next day
+                else:
+                    # Stop-limit order did NOT fill - position remains open
+                    # Continue with normal position updates (trailing stop, unrealized P&L, etc.)
+                    # The stop will be checked again tomorrow
+                    pass  # Fall through to normal position maintenance logic below
             
             # ----------------------------------------------------------------
             # EXIT CRITERION 3: Signal Reversal

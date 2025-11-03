@@ -64,6 +64,11 @@ RISK_PERCENT = 0.01  # Risk 1% of equity per trade
 TRAILING_STOP_ENABLED = True  # Enable trailing stop (as per trading plan)
 MOVE_TO_BREAKEVEN_AFTER_ATR = 1.0  # Optional: Move stop to breakeven after 1× ATR favorable move
 
+# Stop-limit order settings
+STOP_LIMIT_ENABLED = True  # Use stop-limit orders instead of stop-market
+STOP_LIMIT_BAND_TICKS = 4  # Minimum limit band in ticks (4 ticks = $0.002/lb)
+STOP_LIMIT_BAND_MULTIPLIER = 1.5  # Limit band = max(4 ticks, 1.5 × avg overnight spread)
+
 # Carry filter thresholds ($/lb)
 CARRY_THRESHOLD_HALF = 0.01  # Halve position if spread exceeds this
 CARRY_THRESHOLD_QUARTER = 0.02  # Quarter position if spread exceeds this
