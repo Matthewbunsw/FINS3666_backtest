@@ -1123,8 +1123,8 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                         roll_pnl_today = roll_event.roll_pnl
                         realized_pnl_today = current_position.net_pnl
                         
-                        # Update equity with roll P&L
-                        equity += roll_event.roll_pnl
+                        # Update equity with position P&L
+                        equity += current_position.net_pnl  # Position P&L (directional + costs)
                         
                         # Open new position
                         current_position = Position(

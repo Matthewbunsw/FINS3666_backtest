@@ -380,7 +380,7 @@ class BacktestResults:
         self.total_directional_pnl = sum(p.directional_pnl for p in closed_positions)
         self.total_roll_pnl = sum(r.roll_pnl for r in self.roll_events)
         self.total_transaction_costs = sum(p.transaction_costs for p in closed_positions)
-        self.net_pnl = sum(p.net_pnl for p in closed_positions) + self.total_roll_pnl
+        self.net_pnl = sum(p.net_pnl for p in closed_positions)
         
         # Final equity
         self.final_equity = self.initial_equity + self.net_pnl

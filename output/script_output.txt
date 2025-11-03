@@ -218,12 +218,12 @@ Starting simulation...
 Initial Equity: $10,000,000.00
 Risk per trade: 1.0%
 ATR Stop Multiplier: 1.5x
-   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $10,053,610   Progress: 15.9% (40/252 days) | Equity: $9,999,895   Progress: 23.8% (60/252 days) | Equity: $10,122,210   Progress: 31.7% (80/252 days) | Equity: $10,144,330   Progress: 39.7% (100/252 days) | Equity: $10,276,380   Progress: 47.6% (120/252 days) | Equity: $10,293,570   Progress: 55.6% (140/252 days) | Equity: $10,379,175   Progress: 63.5% (160/252 days) | Equity: $10,431,710   Progress: 71.4% (180/252 days) | Equity: $10,493,605   Progress: 79.4% (200/252 days) | Equity: $10,555,970   Progress: 87.3% (220/252 days) | Equity: $10,597,860   Progress: 95.2% (240/252 days) | Equity: $10,567,250
+   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $10,065,790   Progress: 15.9% (40/252 days) | Equity: $10,053,555   Progress: 23.8% (60/252 days) | Equity: $10,206,680   Progress: 31.7% (80/252 days) | Equity: $10,237,540   Progress: 39.7% (100/252 days) | Equity: $10,369,590   Progress: 47.6% (120/252 days) | Equity: $10,425,285   Progress: 55.6% (140/252 days) | Equity: $10,519,195   Progress: 63.5% (160/252 days) | Equity: $10,582,495   Progress: 71.4% (180/252 days) | Equity: $10,654,935   Progress: 79.4% (200/252 days) | Equity: $10,735,345   Progress: 87.3% (220/252 days) | Equity: $10,787,520   Progress: 95.2% (240/252 days) | Equity: $10,759,585
 
 ✓ Backtest simulation complete!
    Total positions: 79
    Total rolls: 11
-   Final equity: $10,602,800.00
+   Final equity: $10,796,320.00
 ================================================================================
 
 ================================================================================
@@ -236,14 +236,14 @@ BACKTEST SUMMARY - HG Copper Futures Strategy
 
 ----------------------------------PERFORMANCE-----------------------------------
 Initial Equity:              $10,000,000.00
-Final Equity:                $10,727,360.00
-Total Return:                7.27%
-Net P&L:                     $727,360.00
+Final Equity:                $10,796,320.00
+Total Return:                7.96%
+Net P&L:                     $796,320.00
 
 ---------------------------------P&L BREAKDOWN----------------------------------
-Directional P&L:             $851,500.00
+Directional P&L:             $866,000.00
 Roll P&L:                    $-55,500.00
-Transaction Costs:           -$68,640.00
+Transaction Costs:           -$69,680.00
   (Commission + Slippage @ $32.5/contract)
 
 --------------------------------TRADE STATISTICS--------------------------------
@@ -251,13 +251,13 @@ Total Trades:                79
 Winning Trades:              56
 Losing Trades:               23
 Win Rate:                    70.89%
-Average Win:                 $23,503.12
-Average Loss:                $-23,187.61
+Average Win:                 $23,914.46
+Average Loss:                $-23,603.91
 Profit Factor:               2.47
 
 ----------------------------------RISK METRICS----------------------------------
-Maximum Drawdown:            1.01%
-Sharpe Ratio (annualized):   2.10
+Maximum Drawdown:            0.99%
+Sharpe Ratio (annualized):   2.08
 Number of Rolls:             11
 ================================================================================
 
@@ -275,10 +275,10 @@ Number of Rolls:             11
    Total Trading Days: 241
    Days in Position: 108
    Days Flat: 133
-   Average Daily Return: 0.0190%
-   Daily Return Std Dev: 0.1431%
-   Best Day: 1.07% on 2024-07-18
-   Worst Day: -0.76% on 2024-08-15
+   Average Daily Return: 0.0192%
+   Daily Return Std Dev: 0.1455%
+   Best Day: 1.11% on 2024-07-18
+   Worst Day: -0.79% on 2024-08-15
    Longest Win Streak: 2 days
    Longest Loss Streak: 30 days
 
