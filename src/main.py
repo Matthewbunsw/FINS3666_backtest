@@ -997,9 +997,8 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
         if m2_today.empty or m3_today.empty:
             continue
         
-        # EXECUTION PRICES: Use OPEN for entry/exit (known at market open)
-        # SETTLEMENT: Use for mark-to-market and carry calculation
-        m2_open = m2_today.iloc[0]['Open']
+        # EXECUTION PRICES: Use SETTLEMENT for entry/exit (end-of-day execution)
+        # HIGH/LOW: Use for stop-loss trigger detection (intraday)
         m2_settlement = m2_today.iloc[0]['Settlement']
         m2_high = m2_today.iloc[0]['High']
         m2_low = m2_today.iloc[0]['Low']
@@ -1016,8 +1015,8 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
         else:
             m2_atr_yesterday = m2_atr  # Fallback to today's ATR if no yesterday
         
-        # Skip if ATR not available yet or Open price missing
-        if np.isnan(m2_atr) or np.isnan(m2_open) or np.isnan(m2_atr_yesterday):
+        # Skip if ATR not available yet or Settlement price missing
+        if np.isnan(m2_atr) or np.isnan(m2_settlement) or np.isnan(m2_atr_yesterday):
             continue
         
         # ====================================================================
@@ -1056,15 +1055,15 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
             needs_roll, next_m2, fnd_date = should_roll(current_date, current_m2_contract, fnd_calendar, contract_data)
             
             if needs_roll and next_m2 is not None:
-                # Execute roll at OPEN price
-                old_price = m2_open
+                # Execute roll at SETTLEMENT price (end of day)
+                old_price = m2_settlement
                 
                 if next_m2 in contract_data:
                     new_m2_data = contract_data[next_m2]
                     new_m2_today = new_m2_data[new_m2_data['Date'] == current_date]
                     
                     if not new_m2_today.empty:
-                        new_price = new_m2_today.iloc[0]['Open']
+                        new_price = new_m2_today.iloc[0]['Settlement']
                         
                         # Close old position, open new position
                         exit_trade, entry_trade, roll_event = execute_roll(
@@ -1112,58 +1111,35 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                         continue
             
             # ----------------------------------------------------------------
-            # EXIT CRITERION 2: Stop-Loss (1.5 × ATR, Stop-Limit Order with Trailing)
+            # EXIT CRITERION 2: Stop-Loss (1.5 × ATR, Trailing Stop)
             # ----------------------------------------------------------------
             # Use CURRENT trailing stop, not the original entry stop
             stop_price = current_position.current_stop
             direction = "LONG" if "LONG" in current_position.entry_trade.action else "SHORT"
             
-            # Calculate limit band for stop-limit order
-            # Limit Band = max(4 ticks, 1.5 × average overnight spread)
-            limit_band = calculate_limit_band(m2_avg_overnight_spread)
-            
-            # Check if stop was hit intraday using high/low
-            stop_hit = False
-            stop_filled = False
-            exit_price = None
+            # Check if stop was triggered intraday using high/low
+            stop_triggered = False
             
             if stop_price is not None:
                 if direction == "LONG":
-                    # LONG stop: check if price fell to/below stop
+                    # LONG stop: check if price fell to/below stop during the day
                     if m2_low <= stop_price:
-                        stop_hit = True
-                        
-                        # Stop-LIMIT logic: only fill if within limit band
-                        limit_price = stop_price - limit_band
-                        
-                        if m2_low >= limit_price:
-                            stop_filled = True
-                            exit_price = stop_price
-                        else:
-                            stop_filled = False  # Price gapped through limit
+                        stop_triggered = True
                         
                 elif direction == "SHORT":
-                    # SHORT stop: check if price rose to/above stop
+                    # SHORT stop: check if price rose to/above stop during the day
                     if m2_high >= stop_price:
-                        stop_hit = True
-                        
-                        # Stop-LIMIT logic: only fill if within limit band
-                        limit_price = stop_price + limit_band
-                        
-                        if m2_high <= limit_price:
-                            stop_filled = True
-                            exit_price = stop_price
-                        else:
-                            stop_filled = False  # Price gapped through limit
+                        stop_triggered = True
             
-            if stop_hit and stop_filled:
-                # Close position at stop price
+            if stop_triggered:
+                # Stop was triggered intraday - exit at settlement price (end of day)
+                # This is more realistic than assuming exact stop price execution
                 exit_trade = Trade(
                     trade_id=trade_id_counter,
                     date=current_date,
                     action="CLOSE_LONG" if direction == "LONG" else "CLOSE_SHORT",
                     contract_code=current_m2_contract,
-                    price=exit_price,
+                    price=m2_settlement,  # Exit at settlement, not exact stop price
                     num_contracts=current_position.entry_trade.num_contracts
                 )
                 trade_id_counter += 1
@@ -1216,7 +1192,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
             
             # Handle exits and reversals for existing positions
             if action in ["CLOSE_LONG", "CLOSE_SHORT", "REVERSE_TO_LONG", "REVERSE_TO_SHORT"]:
-                # Close existing position
+                # Close existing position at settlement (end of day)
                 exit_action = "CLOSE_LONG" if "LONG" in current_position.entry_trade.action else "CLOSE_SHORT"
                 
                 exit_trade = Trade(
@@ -1224,7 +1200,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                     date=current_date,
                     action=exit_action,
                     contract_code=current_m2_contract,
-                    price=m2_open,
+                    price=m2_settlement,  # Exit at settlement
                     num_contracts=current_position.entry_trade.num_contracts
                 )
                 trade_id_counter += 1
@@ -1243,20 +1219,20 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                 entry_price = None
                 entry_direction = None
                 
-                # If reversing, open new position in opposite direction
+                # If reversing, open new position in opposite direction at settlement
                 if action == "REVERSE_TO_LONG":
                     # Calculate position size for new long
                     num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
                     
                     if num_contracts > 0:
-                        stop_price = calculate_stop_loss(m2_open, m2_atr_yesterday, "LONG")
+                        stop_price = calculate_stop_loss(m2_settlement, m2_atr_yesterday, "LONG")
                         
                         entry_trade = Trade(
                             trade_id=trade_id_counter,
                             date=current_date,
                             action="OPEN_LONG",
                             contract_code=current_m2_contract,
-                            price=m2_open,
+                            price=m2_settlement,  # Enter at settlement
                             num_contracts=num_contracts,
                             stop_loss=stop_price,
                             atr=m2_atr,
@@ -1273,7 +1249,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                         position_id_counter += 1
                         
                         position_status = PositionStatus.LONG
-                        entry_price = m2_open
+                        entry_price = m2_settlement
                         entry_direction = "LONG"
                 
                 elif action == "REVERSE_TO_SHORT":
@@ -1281,14 +1257,14 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                     num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
                     
                     if num_contracts > 0:
-                        stop_price = calculate_stop_loss(m2_open, m2_atr_yesterday, "SHORT")
+                        stop_price = calculate_stop_loss(m2_settlement, m2_atr_yesterday, "SHORT")
                         
                         entry_trade = Trade(
                             trade_id=trade_id_counter,
                             date=current_date,
                             action="OPEN_SHORT",
                             contract_code=current_m2_contract,
-                            price=m2_open,
+                            price=m2_settlement,  # Enter at settlement
                             num_contracts=num_contracts,
                             stop_loss=stop_price,
                             atr=m2_atr,
@@ -1305,7 +1281,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                         position_id_counter += 1
                         
                         position_status = PositionStatus.SHORT
-                        entry_price = m2_open
+                        entry_price = m2_settlement
                         entry_direction = "SHORT"
         
         # ====================================================================
@@ -1323,20 +1299,20 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
             carry_multiplier = apply_carry_filter(current_signal, carry_spread)
             action = determine_action(position_status, current_signal, carry_multiplier)
             
-            # Execute entry trades only if we're flat
+            # Execute entry trades only if we're flat - enter at settlement (end of day)
             if action == "OPEN_LONG":
                 # Calculate position size using YESTERDAY's ATR (known before market open)
                 num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
                 
                 if num_contracts > 0:
-                    stop_price = calculate_stop_loss(m2_open, m2_atr_yesterday, "LONG")
+                    stop_price = calculate_stop_loss(m2_settlement, m2_atr_yesterday, "LONG")
                     
                     entry_trade = Trade(
                         trade_id=trade_id_counter,
                         date=current_date,
                         action="OPEN_LONG",
                         contract_code=current_m2_contract,
-                        price=m2_open,
+                        price=m2_settlement,  # Enter at settlement (end of day)
                         num_contracts=num_contracts,
                         stop_loss=stop_price,
                         atr=m2_atr,
@@ -1353,21 +1329,21 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                     position_id_counter += 1
                     
                     position_status = PositionStatus.LONG
-                    entry_price = m2_open
+                    entry_price = m2_settlement
                     entry_direction = "LONG"
             
             elif action == "OPEN_SHORT":
                 num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
                 
                 if num_contracts > 0:
-                    stop_price = calculate_stop_loss(m2_open, m2_atr_yesterday, "SHORT")
+                    stop_price = calculate_stop_loss(m2_settlement, m2_atr_yesterday, "SHORT")
                     
                     entry_trade = Trade(
                         trade_id=trade_id_counter,
                         date=current_date,
                         action="OPEN_SHORT",
                         contract_code=current_m2_contract,
-                        price=m2_open,
+                        price=m2_settlement,  # Enter at settlement (end of day)
                         num_contracts=num_contracts,
                         stop_loss=stop_price,
                         atr=m2_atr,
@@ -1384,7 +1360,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                     position_id_counter += 1
                     
                     position_status = PositionStatus.SHORT
-                    entry_price = m2_open
+                    entry_price = m2_settlement
                     entry_direction = "SHORT"
         
         # ====================================================================
