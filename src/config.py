@@ -60,6 +60,10 @@ ATR_PERIOD = 14  # Days for ATR calculation
 ATR_STOP_MULTIPLIER = 1.5  # Stop distance = 1.5 × ATR
 RISK_PERCENT = 0.01  # Risk 1% of equity per trade
 
+# Trailing stop settings
+TRAILING_STOP_ENABLED = True  # Enable trailing stop (as per trading plan)
+MOVE_TO_BREAKEVEN_AFTER_ATR = 1.0  # Optional: Move stop to breakeven after 1× ATR favorable move
+
 # Carry filter thresholds ($/lb)
 CARRY_THRESHOLD_HALF = 0.01  # Halve position if spread exceeds this
 CARRY_THRESHOLD_QUARTER = 0.02  # Quarter position if spread exceeds this

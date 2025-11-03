@@ -67,9 +67,97 @@ class Position:
     # Position metrics
     holding_days: int = 0
     
+    # Trailing stop tracking
+    current_stop: Optional[float] = None  # Current stop price (trails with favorable price movement)
+    highest_favorable_price: Optional[float] = None  # Highest price reached (for LONG positions)
+    lowest_favorable_price: Optional[float] = None  # Lowest price reached (for SHORT positions)
+    initial_stop: Optional[float] = None  # Original entry stop (for comparison)
+    
     def is_open(self) -> bool:
         """Check if position is still open"""
         return self.exit_trade is None
+    
+    def initialize_trailing_stop(self):
+        """
+        Initialize trailing stop tracking when position is first opened
+        Called after Position is created with entry_trade
+        """
+        from config import ATR_STOP_MULTIPLIER
+        
+        # Initialize stop tracking
+        self.current_stop = self.entry_trade.stop_loss if self.entry_trade.stop_loss is not None else 0.0
+        self.initial_stop = self.entry_trade.stop_loss if self.entry_trade.stop_loss is not None else 0.0
+        
+        # Initialize favorable price tracking at entry price
+        if "LONG" in self.entry_trade.action:
+            self.highest_favorable_price = self.entry_trade.price
+        elif "SHORT" in self.entry_trade.action:
+            self.lowest_favorable_price = self.entry_trade.price
+    
+    def update_trailing_stop(self, current_price: float, atr: float) -> float:
+        """
+        Update the trailing stop based on current price and ATR
+        
+        For LONG positions:
+        - Stop trails UP as price rises (never moves down)
+        - Stop = highest_favorable_price - (ATR_MULTIPLIER × ATR)
+        
+        For SHORT positions:
+        - Stop trails DOWN as price falls (never moves up)
+        - Stop = lowest_favorable_price + (ATR_MULTIPLIER × ATR)
+        
+        Args:
+            current_price: Current market price
+            atr: Current 14-day ATR
+            
+        Returns:
+            Updated stop price
+        """
+        from config import ATR_STOP_MULTIPLIER, MOVE_TO_BREAKEVEN_AFTER_ATR
+        
+        stop_distance = ATR_STOP_MULTIPLIER * atr
+        
+        if "LONG" in self.entry_trade.action:
+            # Track highest price reached
+            if self.highest_favorable_price is None or current_price > self.highest_favorable_price:
+                self.highest_favorable_price = current_price
+            
+            # Calculate new stop based on highest price
+            new_stop = self.highest_favorable_price - stop_distance
+            
+            # Only move stop UP (never down)
+            if self.current_stop is None or new_stop > self.current_stop:
+                self.current_stop = new_stop
+            
+            # Optional: Move to breakeven after favorable move
+            if MOVE_TO_BREAKEVEN_AFTER_ATR and MOVE_TO_BREAKEVEN_AFTER_ATR > 0:
+                favorable_move = self.highest_favorable_price - self.entry_trade.price
+                if favorable_move >= (MOVE_TO_BREAKEVEN_AFTER_ATR * atr):
+                    breakeven_stop = self.entry_trade.price
+                    if breakeven_stop > self.current_stop:
+                        self.current_stop = breakeven_stop
+        
+        elif "SHORT" in self.entry_trade.action:
+            # Track lowest price reached
+            if self.lowest_favorable_price is None or current_price < self.lowest_favorable_price:
+                self.lowest_favorable_price = current_price
+            
+            # Calculate new stop based on lowest price
+            new_stop = self.lowest_favorable_price + stop_distance
+            
+            # Only move stop DOWN (never up)
+            if self.current_stop is None or new_stop < self.current_stop:
+                self.current_stop = new_stop
+            
+            # Optional: Move to breakeven after favorable move
+            if MOVE_TO_BREAKEVEN_AFTER_ATR and MOVE_TO_BREAKEVEN_AFTER_ATR > 0:
+                favorable_move = self.entry_trade.price - self.lowest_favorable_price
+                if favorable_move >= (MOVE_TO_BREAKEVEN_AFTER_ATR * atr):
+                    breakeven_stop = self.entry_trade.price
+                    if breakeven_stop < self.current_stop:
+                        self.current_stop = breakeven_stop
+        
+        return self.current_stop
     
     def calculate_pnl(self) -> None:
         """
@@ -120,7 +208,10 @@ class Position:
             'net_pnl': self.net_pnl,
             'exit_reason': self.exit_reason,
             'holding_days': self.holding_days,
-            'stop_loss': self.entry_trade.stop_loss,
+            'initial_stop': self.initial_stop,
+            'final_stop': self.current_stop,
+            'highest_price': self.highest_favorable_price,
+            'lowest_price': self.lowest_favorable_price,
             'atr': self.entry_trade.atr,
             'carry_spread': self.entry_trade.carry_spread,
             'carry_multiplier': self.entry_trade.carry_multiplier

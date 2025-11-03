@@ -1037,6 +1037,20 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
         if current_position is not None:
             
             # ----------------------------------------------------------------
+            # UPDATE TRAILING STOP DAILY
+            # ----------------------------------------------------------------
+            from config import TRAILING_STOP_ENABLED
+            
+            if TRAILING_STOP_ENABLED:
+                old_stop = current_position.current_stop
+                new_stop = current_position.update_trailing_stop(m2_settlement, m2_atr)
+                
+                # Optional: Log stop movements for debugging
+                # if new_stop != old_stop:
+                #     direction = "LONG" if "LONG" in current_position.entry_trade.action else "SHORT"
+                #     print(f"  [{current_date.strftime('%Y-%m-%d')}] Trailing stop moved: {old_stop:.4f} → {new_stop:.4f} ({direction})")
+            
+            # ----------------------------------------------------------------
             # EXIT CRITERION 1: Roll (Forced Exit - 5 days before FND)
             # ----------------------------------------------------------------
             needs_roll, next_m2, fnd_date = should_roll(current_date, current_m2_contract, fnd_calendar, contract_data)
@@ -1082,6 +1096,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                             position_id=position_id_counter,
                             entry_trade=entry_trade
                         )
+                        current_position.initialize_trailing_stop()
                         position_id_counter += 1
                         trade_id_counter += 2
                         
@@ -1097,9 +1112,10 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                         continue
             
             # ----------------------------------------------------------------
-            # EXIT CRITERION 2: Stop-Loss (1.5 × ATR, Stop-Limit Order)
+            # EXIT CRITERION 2: Stop-Loss (1.5 × ATR, Stop-Limit Order with Trailing)
             # ----------------------------------------------------------------
-            stop_price = current_position.entry_trade.stop_loss
+            # Use CURRENT trailing stop, not the original entry stop
+            stop_price = current_position.current_stop
             direction = "LONG" if "LONG" in current_position.entry_trade.action else "SHORT"
             
             # Calculate limit band for stop-limit order
@@ -1253,6 +1269,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                             position_id=position_id_counter,
                             entry_trade=entry_trade
                         )
+                        current_position.initialize_trailing_stop()
                         position_id_counter += 1
                         
                         position_status = PositionStatus.LONG
@@ -1284,6 +1301,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                             position_id=position_id_counter,
                             entry_trade=entry_trade
                         )
+                        current_position.initialize_trailing_stop()
                         position_id_counter += 1
                         
                         position_status = PositionStatus.SHORT
@@ -1331,6 +1349,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                         position_id=position_id_counter,
                         entry_trade=entry_trade
                     )
+                    current_position.initialize_trailing_stop()
                     position_id_counter += 1
                     
                     position_status = PositionStatus.LONG
@@ -1361,6 +1380,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                         position_id=position_id_counter,
                         entry_trade=entry_trade
                     )
+                    current_position.initialize_trailing_stop()
                     position_id_counter += 1
                     
                     position_status = PositionStatus.SHORT
@@ -1389,7 +1409,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
             signal=current_signal,
             forecasted_return=forecasted_return,
             atr=m2_atr,
-            stop_loss=current_position.entry_trade.stop_loss if current_position else None,
+            stop_loss=current_position.current_stop if current_position else None,  # Use current trailing stop
             carry_spread=carry_spread,
             carry_multiplier=carry_multiplier if 'carry_multiplier' in locals() else 0.0,
             unrealized_pnl=unrealized_pnl,
