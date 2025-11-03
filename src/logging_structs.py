@@ -223,7 +223,7 @@ class DailyMetrics:
             'position_status': self.position_status.value,
             'num_contracts': self.num_contracts,
             'current_price': self.current_price,
-            'signal': self.signal.value,
+            'signal': self.signal if isinstance(self.signal, str) else self.signal.value,
             'forecasted_return': self.forecasted_return,
             'atr': self.atr,
             'stop_loss': self.stop_loss,

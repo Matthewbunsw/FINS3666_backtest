@@ -73,8 +73,8 @@ DAYS_BEFORE_FND_TO_ROLL = 5  # Exit 5 trading days before First Notice Day
 # ============================================================================
 
 # Define backtest period
-BACKTEST_START = '2025-01-02'
-BACKTEST_END = '2025-06-30'
+BACKTEST_START = '2024-01-02'
+BACKTEST_END = '2024-12-31'
 
 INITIAL_EQUITY = 10_000_000  # $10 million starting capital
 
