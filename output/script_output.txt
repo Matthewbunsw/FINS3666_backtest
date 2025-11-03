@@ -70,6 +70,7 @@ Signal generation starts at index: 515 (2024-01-02)
 Total signals to generate: 252
 
 Running rolling regression...
+   ⚠ IMPORTANT: Using t-1 data to predict t returns (no look-ahead bias)
    Progress: 0.4% (1/252 days)   Progress: 20.2% (51/252 days)   Progress: 40.1% (101/252 days)   Progress: 59.9% (151/252 days)   Progress: 79.8% (201/252 days)   Progress: 99.6% (251/252 days)
    ✓ Generated 252 trading signals
 
@@ -80,16 +81,16 @@ Running rolling regression...
    TOTAL:    252 (100.0%)
 
 [MODEL STATISTICS]
-   Average R²: 0.0418
-   Median R²:  0.0402
-   Average |Forecast|: 0.1123%
+   Average R²: 0.0417
+   Median R²:  0.0401
+   Average |Forecast|: 0.1126%
    Max forecast: +0.3586%
    Min forecast: -1.2315%
 
 [AVERAGE BETA COEFFICIENTS]
-   β₁ (DXY):    -0.068299
-   β₂ (PMI):    +1.160887
-   β₃ (STOCKS): -0.082302
+   β₁ (DXY):    -0.068337
+   β₂ (PMI):    +1.156501
+   β₃ (STOCKS): -0.082248
 
 [INTERPRETATION]
    ✓ Copper falls when USD strengthens (β₁ < 0)
@@ -206,8 +207,8 @@ LOADING CONTRACT DATABASE
 ✓ Total contracts loaded: 24
 ================================================================================
 
-[Calculating ATR for all contracts]
-   ✓ ATR calculated for all contracts
+[Calculating ATR and overnight spreads for all contracts]
+   ✓ ATR and overnight spreads calculated for all contracts
 
 ================================================================================
 RUNNING BACKTEST SIMULATION
@@ -217,12 +218,16 @@ Starting simulation...
 Initial Equity: $10,000,000.00
 Risk per trade: 1.0%
 ATR Stop Multiplier: 1.5x
-   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $9,998,930   Progress: 15.9% (40/252 days) | Equity: $10,058,445   Progress: 23.8% (60/252 days) | Equity: $10,082,325   Progress: 31.7% (80/252 days) | Equity: $9,991,270   Progress: 39.7% (100/252 days) | Equity: $10,017,625   Progress: 47.6% (120/252 days) | Equity: $9,898,385   Progress: 55.6% (140/252 days) | Equity: $9,814,930   Progress: 63.5% (160/252 days) | Equity: $9,780,150   Progress: 71.4% (180/252 days) | Equity: $9,745,445   Progress: 79.4% (200/252 days) | Equity: $9,711,170   Progress: 87.3% (220/252 days) | Equity: $9,676,865   Progress: 95.2% (240/252 days) | Equity: $9,599,775
+   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $10,032,360   Progress: 15.9% (40/252 days) | Equity: $9,963,395   Progress: 23.8% (60/252 days) | Equity: $10,046,775   Progress: 31.7% (80/252 days) | Equity: $9,855,786   Progress: 39.7% (100/252 days) | Equity: $9,855,476   Progress: 47.6% (120/252 days) | Equity: $9,773,601   Progress: 55.6% (140/252 days) | Equity: $9,814,596   Progress: 63.5% (160/252 days) | Equity: $9,739,901   Progress: 71.4% (180/252 days) | Equity: $9,649,686   Progress: 79.4% (200/252 days) | Equity: $9,684,506   Progress: 87.3% (220/252 days) | Equity: $9,625,091   Progress: 95.2% (240/252 days) | Equity: $9,509,816
 
 ✓ Backtest simulation complete!
-   Total positions: 106
-   Total rolls: 33
-   Final equity: $9,611,520.00
+   Total positions: 78
+   Total rolls: 11
+   Final equity: $9,494,561.07
+================================================================================
+
+================================================================================
+GENERATING BACKTEST SUMMARY & REPORTS
 ================================================================================
 
 ================================================================================
@@ -231,48 +236,53 @@ BACKTEST SUMMARY - HG Copper Futures Strategy
 
 ----------------------------------PERFORMANCE-----------------------------------
 Initial Equity:              $10,000,000.00
-Final Equity:                $9,649,780.00
-Total Return:                -3.50%
-Net P&L:                     $-350,220.00
+Final Equity:                $9,422,381.07
+Total Return:                -5.78%
+Net P&L:                     $-577,618.93
 
 ---------------------------------P&L BREAKDOWN----------------------------------
-Directional P&L:             $-84,000.00
-Roll P&L:                    $-172,750.00
-Transaction Costs:           -$93,470.00
+Directional P&L:             $-470,383.93
+Roll P&L:                    $-41,000.00
+Transaction Costs:           -$66,235.00
   (Commission + Slippage @ $32.5/contract)
 
 --------------------------------TRADE STATISTICS--------------------------------
-Total Trades:                106
-Winning Trades:              47
-Losing Trades:               59
-Win Rate:                    44.34%
-Average Win:                 $17,408.94
-Average Loss:                $-16,876.10
-Profit Factor:               0.82
+Total Trades:                78
+Winning Trades:              38
+Losing Trades:               40
+Win Rate:                    48.72%
+Average Win:                 $18,980.39
+Average Loss:                $-31,446.85
+Profit Factor:               0.57
 
 ----------------------------------RISK METRICS----------------------------------
-Maximum Drawdown:            5.32%
-Sharpe Ratio (annualized):   0.00
-Number of Rolls:             33
+Maximum Drawdown:            5.66%
+Sharpe Ratio (annualized):   -1.04
+Number of Rolls:             11
 ================================================================================
 
 
-[Exporting Results]
+[Exporting Results to CSV]
    ✓ Positions exported to output/positions.csv
    ✓ Rolls exported to output/rolls.csv
    ✓ Daily metrics exported to output/daily_metrics.csv
-   ✓ Summary exported to output/summary.csv
+   ✓ Summary statistics exported to output/summary.csv
+
+[Generating Performance Charts]
+   ✓ Performance chart saved to output/performance_chart.png
+
+[Additional Performance Metrics]
+   Total Trading Days: 241
+   Days in Position: 109
+   Days Flat: 132
+   Average Daily Return: -0.0113%
+   Daily Return Std Dev: 0.1769%
+   Best Day: 0.73% on 2024-06-25
+   Worst Day: -1.21% on 2024-12-04
+   Longest Win Streak: 2 days
+   Longest Loss Streak: 25 days
+
+================================================================================
 
 ================================================================================
 BACKTEST COMPLETE
-================================================================================
-
-Next steps:
-1. ✓ Load and preprocess market data
-2. ✓ Implement signal generation (3-factor regression)
-3. ✓ Implement position sizing with carry filter
-4. ✓ Implement risk management (ATR stops)
-5. ✓ Run backtest simulation
-6. ✓ Analyze results
-
-

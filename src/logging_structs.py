@@ -65,8 +65,6 @@ class Position:
     exit_reason: Optional[str] = None  # "SIGNAL_REVERSAL", "STOP_LOSS", "ROLL", "END_OF_BACKTEST"
     
     # Position metrics
-    max_favorable_excursion: float = 0.0  # MFE - best price reached
-    max_adverse_excursion: float = 0.0  # MAE - worst price reached
     holding_days: int = 0
     
     def is_open(self) -> bool:
@@ -112,6 +110,7 @@ class Position:
             'position_id': self.position_id,
             'entry_date': self.entry_trade.date,
             'exit_date': self.exit_trade.date if self.exit_trade else None,
+            'contract': self.entry_trade.contract_code,
             'entry_price': self.entry_trade.price,
             'exit_price': self.exit_trade.price if self.exit_trade else None,
             'num_contracts': self.entry_trade.num_contracts,
@@ -121,8 +120,6 @@ class Position:
             'net_pnl': self.net_pnl,
             'exit_reason': self.exit_reason,
             'holding_days': self.holding_days,
-            'mfe': self.max_favorable_excursion,
-            'mae': self.max_adverse_excursion,
             'stop_loss': self.entry_trade.stop_loss,
             'atr': self.entry_trade.atr,
             'carry_spread': self.entry_trade.carry_spread,

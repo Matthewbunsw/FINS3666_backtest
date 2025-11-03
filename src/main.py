@@ -229,14 +229,15 @@ def generate_signals(data, backtest_start, window_days=504):
     
     # Rolling regression - only generate signals for backtest period
     print(f"\nRunning rolling regression...")
+    print(f"   ⚠ IMPORTANT: Using t-1 data to predict t returns (no look-ahead bias)")
     
     for i in range(backtest_start_idx, len(data)):
-        # Check if we have enough history
-        if i < window_days:
+        # Check if we have enough history (need window_days + 1 for yesterday's data)
+        if i < window_days + 1:
             continue
         
-        # Training window: last 'window_days' observations before today
-        train_idx = range(i - window_days, i)
+        # Training window: use data UP TO yesterday (i-1), not including today
+        train_idx = range(i - window_days - 1, i - 1)
         X_train = data.loc[train_idx, feature_cols]
         y_train = data.loc[train_idx, target_col]
         
@@ -244,7 +245,7 @@ def generate_signals(data, backtest_start, window_days=504):
         if X_train.isna().any().any() or y_train.isna().any():
             continue
         
-        # Fit regression model
+        # Fit regression model on historical data (up to yesterday)
         model = LinearRegression()
         model.fit(X_train, y_train)
         
@@ -255,9 +256,10 @@ def generate_signals(data, backtest_start, window_days=504):
         data.loc[i, 'Model_Beta_STOCKS'] = model.coef_[2]
         data.loc[i, 'Model_R2'] = model.score(X_train, y_train)
         
-        # Generate forecast for today using today's features
-        X_today = data.loc[i, feature_cols].values.reshape(1, -1)
-        forecast = model.predict(X_today)[0]
+        # CRITICAL FIX: Use YESTERDAY's features to predict TODAY's return
+        # This simulates generating the signal before market open using available data
+        X_yesterday = data.loc[i-1, feature_cols].values.reshape(1, -1)
+        forecast = model.predict(X_yesterday)[0]
         data.loc[i, 'Forecasted_Return'] = forecast
         
         # Generate signal based on threshold
@@ -397,7 +399,7 @@ def load_contract_data(contract_code, start_date, end_date):
         # Filter to date range
         df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
         
-        # Select relevant columns and rename
+        # Select relevant columns and rename (KEEP OPEN for execution)
         df = df[['Date', 'Open', 'High', 'Low', 'Last', 'Settlement Price']].copy()
         df = df.rename(columns={'Settlement Price': 'Settlement', 'Last': 'Close'})
         
@@ -497,6 +499,64 @@ def add_atr_to_contract(df, period=14):
     """
     df['ATR'] = calculate_atr(df['High'], df['Low'], df['Close'], period)
     return df
+
+
+def calculate_overnight_spread(df):
+    """
+    Calculate overnight spread = Open - Previous Settlement
+    Used to determine limit band for stop-limit orders
+    
+    Args:
+        df: DataFrame with Open and Settlement columns
+    
+    Returns:
+        Series: Overnight spread (absolute value)
+    """
+    prev_settlement = df['Settlement'].shift(1)
+    overnight_spread = abs(df['Open'] - prev_settlement)
+    return overnight_spread
+
+
+def add_overnight_spread_to_contract(df):
+    """
+    Add overnight spread column to contract DataFrame
+    
+    Args:
+        df: DataFrame with Open, Settlement
+    
+    Returns:
+        DataFrame with added Overnight_Spread and Avg_Overnight_Spread columns
+    """
+    df['Overnight_Spread'] = calculate_overnight_spread(df)
+    
+    # Calculate rolling 20-day average overnight spread
+    df['Avg_Overnight_Spread'] = df['Overnight_Spread'].rolling(window=20, min_periods=5).mean()
+    
+    return df
+
+
+def calculate_limit_band(avg_overnight_spread, min_ticks=4, tick_size=0.0005):
+    """
+    Calculate limit band for stop-limit orders
+    
+    Formula: max(4 ticks, 1.5 × average overnight spread)
+    
+    Args:
+        avg_overnight_spread: Average overnight spread ($/lb)
+        min_ticks: Minimum number of ticks (default 4)
+        tick_size: HG tick size (default $0.0005/lb)
+    
+    Returns:
+        float: Limit band in $/lb
+    """
+    min_band = min_ticks * tick_size  # 4 ticks = $0.002/lb
+    
+    if pd.isna(avg_overnight_spread):
+        return min_band
+    
+    dynamic_band = 1.5 * avg_overnight_spread
+    
+    return max(min_band, dynamic_band)
 
 
 def calculate_carry_spread(m2_settlement, m3_settlement):
@@ -692,6 +752,10 @@ def should_roll(current_date, current_m2_contract, fnd_calendar, contract_data):
     m1_fnd = future_contracts.iloc[0]['FND_Date']
     m2_contract = future_contracts.iloc[1]['Contract']  # First-deferred (we're trading this)
     m3_contract = future_contracts.iloc[2]['Contract']  # Second-deferred (roll to this)
+    
+    # If we already rolled (current_m2_contract != m2_contract), don't roll again
+    if current_m2_contract != m2_contract:
+        return False, None, None
     
     # Count actual trading days until M1 FND using M1 contract data
     if m1_contract in contract_data:
@@ -933,86 +997,157 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
         if m2_today.empty or m3_today.empty:
             continue
         
-        m2_price = m2_today.iloc[0]['Settlement']
-        m3_price = m3_today.iloc[0]['Settlement']
+        # EXECUTION PRICES: Use OPEN for entry/exit (known at market open)
+        # SETTLEMENT: Use for mark-to-market and carry calculation
+        m2_open = m2_today.iloc[0]['Open']
+        m2_settlement = m2_today.iloc[0]['Settlement']
+        m2_high = m2_today.iloc[0]['High']
+        m2_low = m2_today.iloc[0]['Low']
+        m3_settlement = m3_today.iloc[0]['Settlement']
         m2_atr = m2_today.iloc[0]['ATR'] if 'ATR' in m2_today.columns else np.nan
         
-        # Skip if ATR not available yet
-        if np.isnan(m2_atr):
+        # Get average overnight spread for stop-limit calculation
+        m2_avg_overnight_spread = m2_today.iloc[0]['Avg_Overnight_Spread'] if 'Avg_Overnight_Spread' in m2_today.columns else np.nan
+        
+        # Get YESTERDAY's ATR for position sizing (known before market open)
+        idx_today = m2_data[m2_data['Date'] == current_date].index
+        if len(idx_today) > 0 and idx_today[0] > 0:
+            m2_atr_yesterday = m2_data.loc[idx_today[0] - 1, 'ATR'] if 'ATR' in m2_data.columns else np.nan
+        else:
+            m2_atr_yesterday = m2_atr  # Fallback to today's ATR if no yesterday
+        
+        # Skip if ATR not available yet or Open price missing
+        if np.isnan(m2_atr) or np.isnan(m2_open) or np.isnan(m2_atr_yesterday):
             continue
         
         # ====================================================================
-        # 2. CHECK FOR ROLL TRIGGER
+        # TRADING LOGIC: Check Exit Criteria if Position Held, Entry Criteria if Flat
         # ====================================================================
-        needs_roll, next_m2, fnd_date = should_roll(current_date, current_m2_contract, fnd_calendar, contract_data)
         
-        if needs_roll and current_position is not None and next_m2 is not None:
-            # Execute roll
-            old_price = m2_price
-            
-            if next_m2 in contract_data:
-                new_m2_data = contract_data[next_m2]
-                new_m2_today = new_m2_data[new_m2_data['Date'] == current_date]
-                
-                if not new_m2_today.empty:
-                    new_price = new_m2_today.iloc[0]['Settlement']
-                    
-                    # Close old position, open new position
-                    exit_trade, entry_trade, roll_event = execute_roll(
-                        current_position,
-                        current_m2_contract,
-                        next_m2,
-                        old_price,
-                        new_price,
-                        current_date,
-                        roll_id_counter,
-                        fnd_date
-                    )
-                    
-                    # Close old position
-                    current_position.exit_trade = exit_trade
-                    current_position.exit_reason = "ROLL"
-                    current_position.calculate_pnl()
-                    results.positions.append(current_position)
-                    
-                    # Update equity with roll P&L
-                    equity += roll_event.roll_pnl
-                    
-                    # Open new position
-                    current_position = Position(
-                        position_id=position_id_counter,
-                        entry_trade=entry_trade
-                    )
-                    position_id_counter += 1
-                    trade_id_counter += 2
-                    
-                    # Log roll event
-                    results.roll_events.append(roll_event)
-                    roll_id_counter += 1
-                    
-                    # Update contract tracking
-                    current_m2_contract = next_m2
-                    entry_price = new_price
+        # Initialize daily P&L tracking
+        realized_pnl_today = 0.0
+        roll_pnl_today = 0.0
         
-        # Update current contract if it changed
-        if current_m2_contract != m2_contract and current_position is None:
-            current_m2_contract = m2_contract
+        # Calculate carry spread (needed for both entry and exit logic)
+        carry_spread = calculate_carry_spread(m2_settlement, m3_settlement)
         
         # ====================================================================
-        # 3. CHECK STOP-LOSS (if position open)
+        # PATH A: POSITION HELD - CHECK EXIT CRITERIA
         # ====================================================================
         if current_position is not None:
+            
+            # ----------------------------------------------------------------
+            # EXIT CRITERION 1: Roll (Forced Exit - 5 days before FND)
+            # ----------------------------------------------------------------
+            needs_roll, next_m2, fnd_date = should_roll(current_date, current_m2_contract, fnd_calendar, contract_data)
+            
+            if needs_roll and next_m2 is not None:
+                # Execute roll at OPEN price
+                old_price = m2_open
+                
+                if next_m2 in contract_data:
+                    new_m2_data = contract_data[next_m2]
+                    new_m2_today = new_m2_data[new_m2_data['Date'] == current_date]
+                    
+                    if not new_m2_today.empty:
+                        new_price = new_m2_today.iloc[0]['Open']
+                        
+                        # Close old position, open new position
+                        exit_trade, entry_trade, roll_event = execute_roll(
+                            current_position,
+                            current_m2_contract,
+                            next_m2,
+                            old_price,
+                            new_price,
+                            current_date,
+                            roll_id_counter,
+                            fnd_date
+                        )
+                        
+                        # Close old position
+                        current_position.exit_trade = exit_trade
+                        current_position.exit_reason = "ROLL"
+                        current_position.calculate_pnl()
+                        results.positions.append(current_position)
+                        
+                        # Capture roll P&L for daily metrics
+                        roll_pnl_today = roll_event.roll_pnl
+                        realized_pnl_today = current_position.net_pnl
+                        
+                        # Update equity with roll P&L
+                        equity += roll_event.roll_pnl
+                        
+                        # Open new position
+                        current_position = Position(
+                            position_id=position_id_counter,
+                            entry_trade=entry_trade
+                        )
+                        position_id_counter += 1
+                        trade_id_counter += 2
+                        
+                        # Log roll event
+                        results.roll_events.append(roll_event)
+                        roll_id_counter += 1
+                        
+                        # Update contract tracking
+                        current_m2_contract = next_m2
+                        entry_price = new_price
+                        
+                        # Skip rest of day after roll - prevent using old contract prices
+                        continue
+            
+            # ----------------------------------------------------------------
+            # EXIT CRITERION 2: Stop-Loss (1.5 × ATR, Stop-Limit Order)
+            # ----------------------------------------------------------------
             stop_price = current_position.entry_trade.stop_loss
             direction = "LONG" if "LONG" in current_position.entry_trade.action else "SHORT"
             
-            if check_stop_loss(m2_price, stop_price, direction):
-                # Stop hit - close position
+            # Calculate limit band for stop-limit order
+            # Limit Band = max(4 ticks, 1.5 × average overnight spread)
+            limit_band = calculate_limit_band(m2_avg_overnight_spread)
+            
+            # Check if stop was hit intraday using high/low
+            stop_hit = False
+            stop_filled = False
+            exit_price = None
+            
+            if stop_price is not None:
+                if direction == "LONG":
+                    # LONG stop: check if price fell to/below stop
+                    if m2_low <= stop_price:
+                        stop_hit = True
+                        
+                        # Stop-LIMIT logic: only fill if within limit band
+                        limit_price = stop_price - limit_band
+                        
+                        if m2_low >= limit_price:
+                            stop_filled = True
+                            exit_price = stop_price
+                        else:
+                            stop_filled = False  # Price gapped through limit
+                        
+                elif direction == "SHORT":
+                    # SHORT stop: check if price rose to/above stop
+                    if m2_high >= stop_price:
+                        stop_hit = True
+                        
+                        # Stop-LIMIT logic: only fill if within limit band
+                        limit_price = stop_price + limit_band
+                        
+                        if m2_high <= limit_price:
+                            stop_filled = True
+                            exit_price = stop_price
+                        else:
+                            stop_filled = False  # Price gapped through limit
+            
+            if stop_hit and stop_filled:
+                # Close position at stop price
                 exit_trade = Trade(
                     trade_id=trade_id_counter,
                     date=current_date,
                     action="CLOSE_LONG" if direction == "LONG" else "CLOSE_SHORT",
                     contract_code=current_m2_contract,
-                    price=m2_price,
+                    price=exit_price,
                     num_contracts=current_position.entry_trade.num_contracts
                 )
                 trade_id_counter += 1
@@ -1032,111 +1167,48 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                 entry_direction = None
                 
                 # Log daily metrics and continue
+                realized_pnl_value = current_position.net_pnl if current_position else 0.0
                 daily_metric = DailyMetrics(
                     date=current_date,
                     position_status=position_status,
                     num_contracts=0,
-                    current_price=m2_price,
+                    current_price=m2_settlement,
                     signal=current_signal,
                     forecasted_return=forecasted_return,
                     atr=m2_atr,
                     stop_loss=None,
-                    carry_spread=calculate_carry_spread(m2_price, m3_price),
+                    carry_spread=carry_spread,
                     carry_multiplier=0.0,
                     unrealized_pnl=0.0,
-                    realized_pnl=current_position.net_pnl if current_position else 0.0,
+                    realized_pnl=realized_pnl_value,
+                    roll_pnl=0.0,
+                    daily_total_pnl=realized_pnl_value,
                     cumulative_pnl=equity - initial_equity,
                     equity=equity
                 )
                 results.daily_metrics.append(daily_metric)
                 
                 continue  # Skip to next day
-        
-        # ====================================================================
-        # 4. CALCULATE CARRY SPREAD AND FILTER
-        # ====================================================================
-        carry_spread = calculate_carry_spread(m2_price, m3_price)
-        carry_multiplier = apply_carry_filter(current_signal, carry_spread)
-        
-        # ====================================================================
-        # 5. DETERMINE ACTION BASED ON SIGNAL
-        # ====================================================================
-        action = determine_action(position_status, current_signal, carry_multiplier)
-        
-        # ====================================================================
-        # 6. EXECUTE TRADES
-        # ====================================================================
-        realized_pnl_today = 0.0
-        
-        if action == "OPEN_LONG":
-            # Calculate position size
-            num_contracts = calculate_position_size(equity, m2_atr, carry_multiplier)
             
-            if num_contracts > 0:
-                stop_price = calculate_stop_loss(m2_price, m2_atr, "LONG")
-                
-                entry_trade = Trade(
-                    trade_id=trade_id_counter,
-                    date=current_date,
-                    action="OPEN_LONG",
-                    contract_code=current_m2_contract,
-                    price=m2_price,
-                    num_contracts=num_contracts,
-                    stop_loss=stop_price,
-                    atr=m2_atr,
-                    carry_spread=carry_spread,
-                    carry_multiplier=carry_multiplier
-                )
-                trade_id_counter += 1
-                
-                current_position = Position(
-                    position_id=position_id_counter,
-                    entry_trade=entry_trade
-                )
-                position_id_counter += 1
-                
-                position_status = PositionStatus.LONG
-                entry_price = m2_price
-                entry_direction = "LONG"
-        
-        elif action == "OPEN_SHORT":
-            num_contracts = calculate_position_size(equity, m2_atr, carry_multiplier)
+            # ----------------------------------------------------------------
+            # EXIT CRITERION 3: Signal Reversal
+            # ----------------------------------------------------------------
+            # Long position closed if signal flips to Neutral or Short
+            # Short position closed if signal flips to Neutral or Long
+            carry_multiplier = apply_carry_filter(current_signal, carry_spread)
+            action = determine_action(position_status, current_signal, carry_multiplier)
             
-            if num_contracts > 0:
-                stop_price = calculate_stop_loss(m2_price, m2_atr, "SHORT")
+            # Handle exits and reversals for existing positions
+            if action in ["CLOSE_LONG", "CLOSE_SHORT", "REVERSE_TO_LONG", "REVERSE_TO_SHORT"]:
+                # Close existing position
+                exit_action = "CLOSE_LONG" if "LONG" in current_position.entry_trade.action else "CLOSE_SHORT"
                 
-                entry_trade = Trade(
-                    trade_id=trade_id_counter,
-                    date=current_date,
-                    action="OPEN_SHORT",
-                    contract_code=current_m2_contract,
-                    price=m2_price,
-                    num_contracts=num_contracts,
-                    stop_loss=stop_price,
-                    atr=m2_atr,
-                    carry_spread=carry_spread,
-                    carry_multiplier=carry_multiplier
-                )
-                trade_id_counter += 1
-                
-                current_position = Position(
-                    position_id=position_id_counter,
-                    entry_trade=entry_trade
-                )
-                position_id_counter += 1
-                
-                position_status = PositionStatus.SHORT
-                entry_price = m2_price
-                entry_direction = "SHORT"
-        
-        elif action == "CLOSE_LONG" or action == "CLOSE_SHORT":
-            if current_position is not None:
                 exit_trade = Trade(
                     trade_id=trade_id_counter,
                     date=current_date,
-                    action=action,
+                    action=exit_action,
                     contract_code=current_m2_contract,
-                    price=m2_price,
+                    price=m2_open,
                     num_contracts=current_position.entry_trade.num_contracts
                 )
                 trade_id_counter += 1
@@ -1149,44 +1221,104 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                 realized_pnl_today = current_position.net_pnl
                 equity += current_position.net_pnl
                 
+                # Reset state
                 position_status = PositionStatus.FLAT
                 current_position = None
                 entry_price = None
                 entry_direction = None
+                
+                # If reversing, open new position in opposite direction
+                if action == "REVERSE_TO_LONG":
+                    # Calculate position size for new long
+                    num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
+                    
+                    if num_contracts > 0:
+                        stop_price = calculate_stop_loss(m2_open, m2_atr_yesterday, "LONG")
+                        
+                        entry_trade = Trade(
+                            trade_id=trade_id_counter,
+                            date=current_date,
+                            action="OPEN_LONG",
+                            contract_code=current_m2_contract,
+                            price=m2_open,
+                            num_contracts=num_contracts,
+                            stop_loss=stop_price,
+                            atr=m2_atr,
+                            carry_spread=carry_spread,
+                            carry_multiplier=carry_multiplier
+                        )
+                        trade_id_counter += 1
+                        
+                        current_position = Position(
+                            position_id=position_id_counter,
+                            entry_trade=entry_trade
+                        )
+                        position_id_counter += 1
+                        
+                        position_status = PositionStatus.LONG
+                        entry_price = m2_open
+                        entry_direction = "LONG"
+                
+                elif action == "REVERSE_TO_SHORT":
+                    # Calculate position size for new short
+                    num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
+                    
+                    if num_contracts > 0:
+                        stop_price = calculate_stop_loss(m2_open, m2_atr_yesterday, "SHORT")
+                        
+                        entry_trade = Trade(
+                            trade_id=trade_id_counter,
+                            date=current_date,
+                            action="OPEN_SHORT",
+                            contract_code=current_m2_contract,
+                            price=m2_open,
+                            num_contracts=num_contracts,
+                            stop_loss=stop_price,
+                            atr=m2_atr,
+                            carry_spread=carry_spread,
+                            carry_multiplier=carry_multiplier
+                        )
+                        trade_id_counter += 1
+                        
+                        current_position = Position(
+                            position_id=position_id_counter,
+                            entry_trade=entry_trade
+                        )
+                        position_id_counter += 1
+                        
+                        position_status = PositionStatus.SHORT
+                        entry_price = m2_open
+                        entry_direction = "SHORT"
         
-        elif action == "REVERSE_TO_LONG":
-            # Close short, open long
-            if current_position is not None:
-                # Close short
-                exit_trade = Trade(
-                    trade_id=trade_id_counter,
-                    date=current_date,
-                    action="CLOSE_SHORT",
-                    contract_code=current_m2_contract,
-                    price=m2_price,
-                    num_contracts=current_position.entry_trade.num_contracts
-                )
-                trade_id_counter += 1
+        # ====================================================================
+        # PATH B: NO POSITION (FLAT) - CHECK ENTRY CRITERIA
+        # ====================================================================
+        else:
+            # Initialize contract tracking if first trade
+            if current_m2_contract is None:
+                current_m2_contract = m2_contract
+            
+            # ----------------------------------------------------------------
+            # ENTRY CRITERION: Signal (forecasted return > threshold)
+            #                  AND Carry Filter (position sizing multiplier)
+            # ----------------------------------------------------------------
+            carry_multiplier = apply_carry_filter(current_signal, carry_spread)
+            action = determine_action(position_status, current_signal, carry_multiplier)
+            
+            # Execute entry trades only if we're flat
+            if action == "OPEN_LONG":
+                # Calculate position size using YESTERDAY's ATR (known before market open)
+                num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
                 
-                current_position.exit_trade = exit_trade
-                current_position.exit_reason = "SIGNAL_REVERSAL"
-                current_position.calculate_pnl()
-                results.positions.append(current_position)
-                
-                realized_pnl_today = current_position.net_pnl
-                equity += current_position.net_pnl
-                
-                # Open long
-                num_contracts = calculate_position_size(equity, m2_atr, carry_multiplier)
                 if num_contracts > 0:
-                    stop_price = calculate_stop_loss(m2_price, m2_atr, "LONG")
+                    stop_price = calculate_stop_loss(m2_open, m2_atr_yesterday, "LONG")
                     
                     entry_trade = Trade(
                         trade_id=trade_id_counter,
                         date=current_date,
                         action="OPEN_LONG",
                         contract_code=current_m2_contract,
-                        price=m2_price,
+                        price=m2_open,
                         num_contracts=num_contracts,
                         stop_loss=stop_price,
                         atr=m2_atr,
@@ -1202,47 +1334,21 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                     position_id_counter += 1
                     
                     position_status = PositionStatus.LONG
-                    entry_price = m2_price
+                    entry_price = m2_open
                     entry_direction = "LONG"
-                else:
-                    position_status = PositionStatus.FLAT
-                    current_position = None
-                    entry_price = None
-                    entry_direction = None
-        
-        elif action == "REVERSE_TO_SHORT":
-            # Close long, open short
-            if current_position is not None:
-                # Close long
-                exit_trade = Trade(
-                    trade_id=trade_id_counter,
-                    date=current_date,
-                    action="CLOSE_LONG",
-                    contract_code=current_m2_contract,
-                    price=m2_price,
-                    num_contracts=current_position.entry_trade.num_contracts
-                )
-                trade_id_counter += 1
+            
+            elif action == "OPEN_SHORT":
+                num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
                 
-                current_position.exit_trade = exit_trade
-                current_position.exit_reason = "SIGNAL_REVERSAL"
-                current_position.calculate_pnl()
-                results.positions.append(current_position)
-                
-                realized_pnl_today = current_position.net_pnl
-                equity += current_position.net_pnl
-                
-                # Open short
-                num_contracts = calculate_position_size(equity, m2_atr, carry_multiplier)
                 if num_contracts > 0:
-                    stop_price = calculate_stop_loss(m2_price, m2_atr, "SHORT")
+                    stop_price = calculate_stop_loss(m2_open, m2_atr_yesterday, "SHORT")
                     
                     entry_trade = Trade(
                         trade_id=trade_id_counter,
                         date=current_date,
                         action="OPEN_SHORT",
                         contract_code=current_m2_contract,
-                        price=m2_price,
+                        price=m2_open,
                         num_contracts=num_contracts,
                         stop_loss=stop_price,
                         atr=m2_atr,
@@ -1258,38 +1364,38 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                     position_id_counter += 1
                     
                     position_status = PositionStatus.SHORT
-                    entry_price = m2_price
+                    entry_price = m2_open
                     entry_direction = "SHORT"
-                else:
-                    position_status = PositionStatus.FLAT
-                    current_position = None
-                    entry_price = None
-                    entry_direction = None
         
         # ====================================================================
-        # 7. CALCULATE UNREALIZED P&L
+        # CALCULATE UNREALIZED P&L (use settlement for mark-to-market)
         # ====================================================================
         unrealized_pnl = 0.0
         if current_position is not None and entry_price is not None:
-            price_change = m2_price - entry_price if entry_direction == "LONG" else entry_price - m2_price
+            price_change = m2_settlement - entry_price if entry_direction == "LONG" else entry_price - m2_settlement
             unrealized_pnl = price_change * CONTRACT_SIZE * current_position.entry_trade.num_contracts
         
         # ====================================================================
-        # 8. LOG DAILY METRICS
+        # LOG DAILY METRICS (use settlement for price tracking)
         # ====================================================================
+        # Calculate daily total P&L (realized + roll P&L)
+        daily_total = realized_pnl_today + roll_pnl_today
+        
         daily_metric = DailyMetrics(
             date=current_date,
             position_status=position_status,
             num_contracts=current_position.entry_trade.num_contracts if current_position else 0,
-            current_price=m2_price,
+            current_price=m2_settlement,
             signal=current_signal,
             forecasted_return=forecasted_return,
             atr=m2_atr,
             stop_loss=current_position.entry_trade.stop_loss if current_position else None,
             carry_spread=carry_spread,
-            carry_multiplier=carry_multiplier,
+            carry_multiplier=carry_multiplier if 'carry_multiplier' in locals() else 0.0,
             unrealized_pnl=unrealized_pnl,
             realized_pnl=realized_pnl_today,
+            roll_pnl=roll_pnl_today,
+            daily_total_pnl=daily_total,
             cumulative_pnl=equity - initial_equity,
             equity=equity
         )
@@ -1297,11 +1403,11 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
         results.daily_metrics.append(daily_metric)
     
     # ====================================================================
-    # 9. CLOSE ANY OPEN POSITIONS AT END
+    # CLOSE ANY OPEN POSITIONS AT END OF BACKTEST
     # ====================================================================
     if current_position is not None:
         last_date = signal_data.iloc[-1]['Date']
-        last_price = m2_price
+        last_price = m2_settlement
         
         exit_trade = Trade(
             trade_id=trade_id_counter,
@@ -1332,6 +1438,206 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
     print("="*80)
     
     return results
+
+
+# ============================================================================
+# SUMMARY & REPORTING
+# ============================================================================
+
+def generate_backtest_summary(results):
+    """
+    Generate comprehensive backtest summary with:
+    - Performance statistics printed to console
+    - CSV exports of all results
+    - Equity curve and returns chart
+    
+    Args:
+        results: BacktestResults object
+    """
+    import matplotlib
+    matplotlib.use('Agg')  # Use non-interactive backend
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    
+    print("\n" + "="*80)
+    print("GENERATING BACKTEST SUMMARY & REPORTS")
+    print("="*80)
+    
+    # ========================================================================
+    # 1. PRINT PERFORMANCE SUMMARY
+    # ========================================================================
+    results.print_summary()
+    
+    # ========================================================================
+    # 2. EXPORT TO CSV FILES
+    # ========================================================================
+    print("\n[Exporting Results to CSV]")
+    result_dfs = results.to_dataframes()
+    
+    if len(result_dfs['positions']) > 0:
+        result_dfs['positions'].to_csv('output/positions.csv', index=False)
+        print("   ✓ Positions exported to output/positions.csv")
+    else:
+        print("   ⚠ No positions to export")
+    
+    if len(result_dfs['rolls']) > 0:
+        result_dfs['rolls'].to_csv('output/rolls.csv', index=False)
+        print("   ✓ Rolls exported to output/rolls.csv")
+    else:
+        print("   ⚠ No rolls to export")
+    
+    if len(result_dfs['daily']) > 0:
+        result_dfs['daily'].to_csv('output/daily_metrics.csv', index=False)
+        print("   ✓ Daily metrics exported to output/daily_metrics.csv")
+    else:
+        print("   ⚠ No daily metrics to export")
+    
+    result_dfs['summary'].to_csv('output/summary.csv')
+    print("   ✓ Summary statistics exported to output/summary.csv")
+    
+    # ========================================================================
+    # 3. GENERATE EQUITY CURVE & RETURNS CHART
+    # ========================================================================
+    if len(result_dfs['daily']) > 0:
+        print("\n[Generating Performance Charts]")
+        
+        daily_df = result_dfs['daily'].copy()
+        daily_df['date'] = pd.to_datetime(daily_df['date'])
+        
+        # Create figure with 3 subplots
+        fig, axes = plt.subplots(3, 1, figsize=(14, 12))
+        fig.suptitle('HG Copper Futures Backtest - Performance Analysis', 
+                     fontsize=16, fontweight='bold', y=0.995)
+        
+        # ====================================================================
+        # Subplot 1: Equity Curve
+        # ====================================================================
+        ax1 = axes[0]
+        ax1.plot(daily_df['date'], daily_df['equity'], 
+                linewidth=2, color='#2E86AB', label='Equity')
+        ax1.axhline(y=results.initial_equity, color='gray', 
+                   linestyle='--', alpha=0.7, label='Initial Equity')
+        
+        ax1.set_title('Account Equity Over Time', fontsize=12, fontweight='bold', pad=10)
+        ax1.set_ylabel('Equity ($)', fontsize=10)
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(loc='best')
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax1.xaxis.set_major_locator(mdates.MonthLocator())
+        
+        # Format y-axis as currency
+        ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x:,.0f}'))
+        
+        # Add performance metrics text box
+        metrics_text = (
+            f"Initial: ${results.initial_equity:,.0f}\n"
+            f"Final: ${results.final_equity:,.0f}\n"
+            f"Return: {results.total_return:.2f}%\n"
+            f"Max DD: {results.max_drawdown:.2f}%"
+        )
+        ax1.text(0.02, 0.98, metrics_text, transform=ax1.transAxes,
+                fontsize=9, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        # ====================================================================
+        # Subplot 2: Cumulative P&L
+        # ====================================================================
+        ax2 = axes[1]
+        ax2.plot(daily_df['date'], daily_df['cumulative_pnl'], 
+                linewidth=2, color='#A23B72', label='Cumulative P&L')
+        ax2.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
+        ax2.fill_between(daily_df['date'], daily_df['cumulative_pnl'], 0, 
+                         where=(daily_df['cumulative_pnl'] >= 0), 
+                         color='green', alpha=0.3, label='Profit')
+        ax2.fill_between(daily_df['date'], daily_df['cumulative_pnl'], 0, 
+                         where=(daily_df['cumulative_pnl'] < 0), 
+                         color='red', alpha=0.3, label='Loss')
+        
+        ax2.set_title('Cumulative P&L', fontsize=12, fontweight='bold', pad=10)
+        ax2.set_ylabel('Cumulative P&L ($)', fontsize=10)
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(loc='best')
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax2.xaxis.set_major_locator(mdates.MonthLocator())
+        ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x:,.0f}'))
+        
+        # ====================================================================
+        # Subplot 3: Daily Returns Distribution
+        # ====================================================================
+        ax3 = axes[2]
+        
+        # Calculate daily returns (%)
+        daily_df['daily_return_pct'] = (daily_df['daily_total_pnl'] / 
+                                         daily_df['equity'].shift(1)) * 100
+        daily_df['daily_return_pct'] = daily_df['daily_return_pct'].fillna(0)
+        
+        # Bar chart of daily returns
+        colors = ['green' if x >= 0 else 'red' for x in daily_df['daily_return_pct']]
+        ax3.bar(daily_df['date'], daily_df['daily_return_pct'], 
+               color=colors, alpha=0.6, width=1.0)
+        ax3.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
+        
+        ax3.set_title('Daily Returns (%)', fontsize=12, fontweight='bold', pad=10)
+        ax3.set_xlabel('Date', fontsize=10)
+        ax3.set_ylabel('Daily Return (%)', fontsize=10)
+        ax3.grid(True, alpha=0.3, axis='y')
+        ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax3.xaxis.set_major_locator(mdates.MonthLocator())
+        
+        # Add statistics text box
+        returns_stats = (
+            f"Mean: {daily_df['daily_return_pct'].mean():.3f}%\n"
+            f"Std Dev: {daily_df['daily_return_pct'].std():.3f}%\n"
+            f"Best Day: {daily_df['daily_return_pct'].max():.2f}%\n"
+            f"Worst Day: {daily_df['daily_return_pct'].min():.2f}%"
+        )
+        ax3.text(0.02, 0.98, returns_stats, transform=ax3.transAxes,
+                fontsize=9, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        # ====================================================================
+        # Format and save
+        # ====================================================================
+        plt.tight_layout(rect=[0, 0, 1, 0.99])
+        
+        # Rotate x-axis labels for better readability
+        for ax in axes:
+            ax.tick_params(axis='x', rotation=45)
+        
+        # Save chart
+        chart_filename = 'output/performance_chart.png'
+        plt.savefig(chart_filename, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"   ✓ Performance chart saved to {chart_filename}")
+        
+        # ====================================================================
+        # Additional Statistics
+        # ====================================================================
+        print("\n[Additional Performance Metrics]")
+        print(f"   Total Trading Days: {len(daily_df)}")
+        print(f"   Days in Position: {(daily_df['num_contracts'] > 0).sum()}")
+        print(f"   Days Flat: {(daily_df['num_contracts'] == 0).sum()}")
+        print(f"   Average Daily Return: {daily_df['daily_return_pct'].mean():.4f}%")
+        print(f"   Daily Return Std Dev: {daily_df['daily_return_pct'].std():.4f}%")
+        print(f"   Best Day: {daily_df['daily_return_pct'].max():.2f}% on {daily_df.loc[daily_df['daily_return_pct'].idxmax(), 'date'].strftime('%Y-%m-%d')}")
+        print(f"   Worst Day: {daily_df['daily_return_pct'].min():.2f}% on {daily_df.loc[daily_df['daily_return_pct'].idxmin(), 'date'].strftime('%Y-%m-%d')}")
+        
+        # Calculate win/loss streaks
+        daily_df['is_win'] = daily_df['daily_total_pnl'] > 0
+        daily_df['streak'] = (daily_df['is_win'] != daily_df['is_win'].shift()).cumsum()
+        win_streaks = daily_df[daily_df['is_win']].groupby('streak').size()
+        loss_streaks = daily_df[~daily_df['is_win']].groupby('streak').size()
+        
+        if len(win_streaks) > 0:
+            print(f"   Longest Win Streak: {win_streaks.max()} days")
+        if len(loss_streaks) > 0:
+            print(f"   Longest Loss Streak: {loss_streaks.max()} days")
+    
+    else:
+        print("\n⚠ No daily metrics available for chart generation")
+    
+    print("\n" + "="*80)
 
 
 # ============================================================================
@@ -1390,48 +1696,21 @@ if __name__ == "__main__":
     # Step 4: Build contract database
     contract_data = build_contract_database(fnd_calendar, DATA_START, BACKTEST_END)
     
-    # Step 5: Add ATR to all contracts
-    print("\n[Calculating ATR for all contracts]")
+    # Step 5: Add ATR and overnight spread to all contracts
+    print("\n[Calculating ATR and overnight spreads for all contracts]")
     for contract_code, df in contract_data.items():
         contract_data[contract_code] = add_atr_to_contract(df, period=ATR_PERIOD)
-    print("   ✓ ATR calculated for all contracts")
+        contract_data[contract_code] = add_overnight_spread_to_contract(df)
+    print("   ✓ ATR and overnight spreads calculated for all contracts")
     
     # Step 6: Run backtest
     results = run_backtest(backtest_data, contract_data, fnd_calendar, INITIAL_EQUITY)
     
-    # Step 7: Print summary
-    results.print_summary()
-    
-    # Step 8: Export results
-    print("\n[Exporting Results]")
-    result_dfs = results.to_dataframes()
-    
-    if len(result_dfs['positions']) > 0:
-        result_dfs['positions'].to_csv('output/positions.csv', index=False)
-        print("   ✓ Positions exported to output/positions.csv")
-    
-    if len(result_dfs['rolls']) > 0:
-        result_dfs['rolls'].to_csv('output/rolls.csv', index=False)
-        print("   ✓ Rolls exported to output/rolls.csv")
-    
-    if len(result_dfs['daily']) > 0:
-        result_dfs['daily'].to_csv('output/daily_metrics.csv', index=False)
-        print("   ✓ Daily metrics exported to output/daily_metrics.csv")
-    
-    result_dfs['summary'].to_csv('output/summary.csv')
-    print("   ✓ Summary exported to output/summary.csv")
+    # Step 7: Generate comprehensive summary with charts
+    generate_backtest_summary(results)
     
     print("\n" + "="*80)
     print("BACKTEST COMPLETE")
-    print("="*80)
-    print("\nNext steps:")
-    print("1. ✓ Load and preprocess market data")
-    print("2. ✓ Implement signal generation (3-factor regression)")
-    print("3. ✓ Implement position sizing with carry filter")
-    print("4. ✓ Implement risk management (ATR stops)")
-    print("5. ✓ Run backtest simulation")
-    print("6. ✓ Analyze results")
-    print("\n")
     
     # Close the log file
     sys.stdout.close()
