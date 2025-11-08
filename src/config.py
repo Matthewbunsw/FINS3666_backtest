@@ -50,15 +50,15 @@ TOTAL_TRANSACTION_COST = COMMISSION + SLIPPAGE  # $32.50 per contract
 # ============================================================================
 
 # Signal thresholds
-SIGNAL_THRESHOLD = 0.1  # ±0.1% forecasted return threshold
+SIGNAL_THRESHOLD = 0.03  # ±0.1% forecasted return threshold
 
 # Regression parameters
 REGRESSION_WINDOW_DAYS = 504  # 2 years of trading days (~252 days/year)
 
 # Risk management
 ATR_PERIOD = 14  # Days for ATR calculation
-ATR_STOP_MULTIPLIER = 1.5  # Stop distance = 1.5 × ATR
-RISK_PERCENT = 0.01  # Risk 1% of equity per trade
+ATR_STOP_MULTIPLIER = 2.5  # Stop distance = 1.5 × ATR
+RISK_PERCENT = 0.03  # Risk 1% of equity per trade
 
 # Trailing stop settings
 TRAILING_STOP_ENABLED = True  # Enable trailing stop (as per trading plan)
@@ -70,8 +70,8 @@ STOP_LIMIT_BAND_TICKS = 4  # Minimum limit band in ticks (4 ticks = $0.002/lb)
 STOP_LIMIT_BAND_MULTIPLIER = 1.5  # Limit band = max(4 ticks, 1.5 × avg overnight spread)
 
 # Carry filter thresholds ($/lb)
-CARRY_THRESHOLD_HALF = 0.01  # Halve position if spread exceeds this
-CARRY_THRESHOLD_QUARTER = 0.02  # Quarter position if spread exceeds this
+CARRY_THRESHOLD_HALF = 0.015  # Halve position if spread exceeds this
+CARRY_THRESHOLD_QUARTER = 0.030  # Quarter position if spread exceeds this
 
 # Roll management
 DAYS_BEFORE_FND_TO_ROLL = 5  # Exit 5 trading days before First Notice Day

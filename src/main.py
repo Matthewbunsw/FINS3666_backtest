@@ -182,142 +182,209 @@ def load_and_preprocess_data(start_date='2021-01-04', end_date='2025-10-31'):
 # SIGNAL GENERATION (3-FACTOR REGRESSION MODEL)
 # ============================================================================
 
-def generate_signals(data, backtest_start, window_days=504):
+# --- MODEL FACTORY -----------------------------------------------------------
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import RidgeCV, LogisticRegression
+from sklearn.ensemble import GradientBoostingRegressor
+
+def make_model(model_type: str):
     """
-    Generate trading signals using rolling 3-factor regression
-    
-    Model: HG1_t = α + β₁·DXY_t + β₂·ΔPMI_t + β₃·STOCKS_t + ε_t
-    
-    Args:
-        data: DataFrame with all features (includes training period)
-        backtest_start: Date when backtest starts (signals generated from here)
-        window_days: Rolling window for regression (default: 504 days = 2 years)
-    
-    Returns:
-        DataFrame with signals (only backtest period)
+    Return a sklearn model by name.
+    model_type in {"ols","ridge","gbr","logit"}.
+    - "ols": LinearRegression (your current baseline)
+    - "ridge": RidgeCV + StandardScaler (recommended)
+    - "gbr": GradientBoostingRegressor (nonlinear)
+    - "logit": LogisticRegression for direction (classification)
     """
+    model_type = model_type.lower()
+    if model_type == "ols":
+        from sklearn.linear_model import LinearRegression
+        return LinearRegression()
+    if model_type == "ridge":
+        # regularized & scaled
+        return make_pipeline(StandardScaler(), RidgeCV(alphas=[0.01, 0.1, 1.0, 10.0]))
+    if model_type == "gbr":
+        # shallow trees to avoid overfit on small windows
+        return GradientBoostingRegressor(max_depth=2, n_estimators=400, learning_rate=0.03)
+    if model_type == "logit":
+        # classification: predict Prob(up)
+        return make_pipeline(StandardScaler(),
+                             LogisticRegression(C=1.0, solver="lbfgs", max_iter=1000))
+    raise ValueError(f"Unknown model_type: {model_type}")
+
+
+def generate_signals(
+    data,
+    backtest_start,
+    window_days=504,
+    model_type="ols",              # "ols" | "ridge" | "gbr" | "logit"
+    cls_long=0.60,                   # for "logit": LONG if p_up > 0.60
+    cls_short=0.40,                  # for "logit": SHORT if p_up < 0.40
+    add_lags=True,                   # add simple 1-day lags of drivers
+):
+    """
+    Rolling model to forecast next-day HG return using only info known by t-1.
+    - Supports regression (OLS, Ridge, GBR) or classification (Logit).
+    - Logs R^2 (regression models) and directional hit-rate for all models.
+    """
+
     print("\n" + "="*80)
-    print("GENERATING TRADING SIGNALS (3-FACTOR REGRESSION)")
+    print(f"GENERATING TRADING SIGNALS (model={model_type}, window={window_days}d)")
     print("="*80)
-    print(f"\nRegression window: {window_days} days (~{window_days/252:.1f} years)")
-    print(f"Signal threshold: ±{SIGNAL_THRESHOLD}%")
-    print(f"Generating signals from: {backtest_start}")
-    
-    # Prepare features and target
+    print(f"Signal threshold: ±{SIGNAL_THRESHOLD}%  |  Start: {backtest_start}")
+
+    # Base features & target
     feature_cols = ['DXY_logret', 'PMI_change', 'STOCKS_logret']
-    target_col = 'HG1_logret'
-    
-    # Initialize columns for results
-    data['Forecasted_Return'] = np.nan
-    data['Signal'] = None  # Use None to distinguish unprocessed rows
-    data['Model_Alpha'] = np.nan
-    data['Model_Beta_DXY'] = np.nan
-    data['Model_Beta_PMI'] = np.nan
-    data['Model_Beta_STOCKS'] = np.nan
-    data['Model_R2'] = np.nan
-    
-    # Find index where backtest starts
-    backtest_start_idx = data[data['Date'] >= backtest_start].index[0]
-    
-    print(f"\nTraining period ends at index: {backtest_start_idx - 1} ({data.loc[backtest_start_idx - 1, 'Date'].date()})")
-    print(f"Signal generation starts at index: {backtest_start_idx} ({data.loc[backtest_start_idx, 'Date'].date()})")
-    print(f"Total signals to generate: {len(data) - backtest_start_idx}")
-    
-    # Counters for accurate signal distribution
-    long_signals = 0
-    short_signals = 0
-    neutral_signals = 0
-    
-    # Rolling regression - only generate signals for backtest period
-    print(f"\nRunning rolling regression...")
-    print(f"   ⚠ IMPORTANT: Using t-1 data to predict t returns (no look-ahead bias)")
-    
-    for i in range(backtest_start_idx, len(data)):
-        # Check if we have enough history (need window_days + 1 for yesterday's data)
-        if i < window_days + 1:
-            continue
-        
-        # Training window: use data UP TO yesterday (i-1), not including today
-        train_idx = range(i - window_days - 1, i - 1)
-        X_train = data.loc[train_idx, feature_cols]
-        y_train = data.loc[train_idx, target_col]
-        
-        # Skip if any NaN in training data
+    target_col   = 'HG1_logret'
+
+    df = data.copy()
+
+    # (Optional) add 1-day lags of features (helps daily predictability)
+    if add_lags:
+        for c in feature_cols:
+            df[c + "_lag1"] = df[c].shift(1)
+        feature_cols = feature_cols + [c + "_lag1" for c in feature_cols]
+
+    # Init outputs
+    df['Forecasted_Return'] = np.nan
+    df['Signal'] = None
+    df['Model_Alpha'] = np.nan
+    df['Model_Beta_DXY'] = np.nan
+    df['Model_Beta_PMI'] = np.nan
+    df['Model_Beta_STOCKS'] = np.nan
+    df['Model_R2'] = np.nan
+    df['Hit'] = np.nan   # 1 if sign correct, else 0
+
+    # find start index
+    backtest_start_idx = df[df['Date'] >= backtest_start].index[0]
+
+    # IMPORTANT: use exactly the previous `window_days` obs ending at t-1
+    # Train on indices [i-window_days, i-1], predict using X_{i-1} for y_i.
+    long_s = short_s = neut_s = 0
+    hits = 0
+    total_preds = 0
+
+    for i in range(backtest_start_idx, len(df)):
+        if i - window_days < 1:
+            continue  # not enough history for a full window
+
+        train_slice = slice(i - window_days, i)   # inclusive of i-1, exclusive of i
+        X_train = df.loc[train_slice, feature_cols]
+        y_train = df.loc[train_slice, target_col]
+
         if X_train.isna().any().any() or y_train.isna().any():
             continue
-        
-        # Fit regression model on historical data (up to yesterday)
-        model = LinearRegression()
-        model.fit(X_train, y_train)
-        
-        # Store model coefficients
-        data.loc[i, 'Model_Alpha'] = model.intercept_
-        data.loc[i, 'Model_Beta_DXY'] = model.coef_[0]
-        data.loc[i, 'Model_Beta_PMI'] = model.coef_[1]
-        data.loc[i, 'Model_Beta_STOCKS'] = model.coef_[2]
-        data.loc[i, 'Model_R2'] = model.score(X_train, y_train)
-        
-        # CRITICAL FIX: Use YESTERDAY's features to predict TODAY's return
-        # This simulates generating the signal before market open using available data
-        X_yesterday = data.loc[i-1, feature_cols].values.reshape(1, -1)
-        forecast = model.predict(X_yesterday)[0]
-        data.loc[i, 'Forecasted_Return'] = forecast
-        
-        # Generate signal based on threshold
-        if forecast > SIGNAL_THRESHOLD:
-            signal = SignalType.LONG.value
-            long_signals += 1
-        elif forecast < -SIGNAL_THRESHOLD:
-            signal = SignalType.SHORT.value
-            short_signals += 1
+
+        # model
+        model = make_model(model_type)
+
+        # classification target for "logit"
+        if model_type == "logit":
+            y_cls = (y_train > 0).astype(int)
+            model.fit(X_train, y_cls)
         else:
-            signal = SignalType.NEUTRAL.value
-            neutral_signals += 1
-        
-        data.loc[i, 'Signal'] = signal
-        
-        # Progress indicator
+            model.fit(X_train, y_train)
+
+        # predict with yesterday's features (known at decision time)
+        X_yday = df.loc[i-1, feature_cols].values.reshape(1, -1)
+        if model_type == "logit":
+            p_up = float(model.predict_proba(X_yday)[0, 1])
+            # turn probability into a numeric pseudo-forecast so sizing logic can read it
+            forecast = (p_up - 0.5) * 2 * 0.30  # maps 0..1 to about -0.30..+0.30 (%)
+        else:
+            forecast = float(model.predict(X_yday)[0])
+
+        df.loc[i, 'Forecasted_Return'] = forecast
+
+        # store betas & R2 for linear models only (others leave NaN for betas)
+        if model_type in ("ols", "ridge"):
+            # unwrap pipeline if needed
+            try:
+                reg = model[-1] if hasattr(model, "__getitem__") else model
+                coefs = getattr(reg, "coef_", None)
+                intercept = getattr(reg, "intercept_", np.nan)
+            except Exception:
+                coefs, intercept = None, np.nan
+
+            if coefs is not None:
+                # coefs order follows X_train columns
+                # map back to original 3 main betas if available
+                coef_map = dict(zip(X_train.columns, coefs))
+                df.loc[i, 'Model_Alpha'] = intercept
+                df.loc[i, 'Model_Beta_DXY'] = coef_map.get('DXY_logret', np.nan)
+                df.loc[i, 'Model_Beta_PMI'] = coef_map.get('PMI_change', np.nan)
+                df.loc[i, 'Model_Beta_STOCKS'] = coef_map.get('STOCKS_logret', np.nan)
+            # in-sample window R^2
+            try:
+                df.loc[i, 'Model_R2'] = model.score(X_train, y_train)
+            except Exception:
+                pass
+        elif model_type == "gbr":
+            try:
+                df.loc[i, 'Model_R2'] = model.score(X_train, y_train)
+            except Exception:
+                pass
+
+        # signal mapping
+        if model_type == "logit":
+            if p_up > cls_long:
+                sig = SignalType.LONG.value
+                long_s += 1
+            elif p_up < cls_short:
+                sig = SignalType.SHORT.value
+                short_s += 1
+            else:
+                sig = SignalType.NEUTRAL.value
+                neut_s += 1
+        else:
+            if forecast > SIGNAL_THRESHOLD:
+                sig = SignalType.LONG.value
+                long_s += 1
+            elif forecast < -SIGNAL_THRESHOLD:
+                sig = SignalType.SHORT.value
+                short_s += 1
+            else:
+                sig = SignalType.NEUTRAL.value
+                neut_s += 1
+
+        df.loc[i, 'Signal'] = sig
+
+        # directional hit (evaluation): compare sign(forecast) vs sign(actual y_i)
+        actual = df.loc[i, target_col]
+        if not np.isnan(actual):
+            if model_type == "logit":
+                pred_sign = 1 if p_up >= 0.5 else -1
+            else:
+                pred_sign = 1 if forecast >= 0 else -1
+            true_sign = 1 if actual >= 0 else -1
+            hit = int(pred_sign == true_sign)
+            df.loc[i, 'Hit'] = hit
+            hits += hit
+            total_preds += 1
+
+        # optional progress ping
         if (i - backtest_start_idx) % 50 == 0:
-            pct = ((i - backtest_start_idx + 1) / (len(data) - backtest_start_idx)) * 100
-            print(f"   Progress: {pct:.1f}% ({i - backtest_start_idx + 1}/{len(data) - backtest_start_idx} days)", end='\r')
-    
-    signals_generated = long_signals + short_signals + neutral_signals
-    print(f"\n   ✓ Generated {signals_generated} trading signals")
-    
-    # Filter data to only backtest period with signals
-    backtest_data = data[data['Date'] >= backtest_start].copy()
+            pct = ((i - backtest_start_idx + 1) / (len(df) - backtest_start_idx)) * 100
+            print(f"   Progress: {pct:.1f}%   R2@i={df.loc[i,'Model_R2']:.3f}   Hits={hits}/{total_preds}", end="\r")
+
+    # backtest period only, with valid signals
+    backtest_data = df[df['Date'] >= backtest_start].copy()
     backtest_data = backtest_data[backtest_data['Signal'].notna()].reset_index(drop=True)
-    
-    # Signal statistics - NOW ACCURATE
-    print(f"\n[SIGNAL DISTRIBUTION]")
-    print(f"   LONG:    {long_signals:4d} ({long_signals/signals_generated*100:5.1f}%)")
-    print(f"   SHORT:   {short_signals:4d} ({short_signals/signals_generated*100:5.1f}%)")
-    print(f"   NEUTRAL: {neutral_signals:4d} ({neutral_signals/signals_generated*100:5.1f}%)")
-    print(f"   TOTAL:   {signals_generated:4d} (100.0%)")
-    
-    # Model performance statistics
-    print(f"\n[MODEL STATISTICS]")
-    print(f"   Average R²: {backtest_data['Model_R2'].mean():.4f}")
-    print(f"   Median R²:  {backtest_data['Model_R2'].median():.4f}")
-    print(f"   Average |Forecast|: {backtest_data['Forecasted_Return'].abs().mean():.4f}%")
-    print(f"   Max forecast: {backtest_data['Forecasted_Return'].max():+.4f}%")
-    print(f"   Min forecast: {backtest_data['Forecasted_Return'].min():+.4f}%")
-    
-    # Beta coefficients summary
-    print(f"\n[AVERAGE BETA COEFFICIENTS]")
-    print(f"   β₁ (DXY):    {backtest_data['Model_Beta_DXY'].mean():+.6f}")
-    print(f"   β₂ (PMI):    {backtest_data['Model_Beta_PMI'].mean():+.6f}")
-    print(f"   β₃ (STOCKS): {backtest_data['Model_Beta_STOCKS'].mean():+.6f}")
-    
-    # Interpretation
-    print(f"\n[INTERPRETATION]")
-    if backtest_data['Model_Beta_DXY'].mean() < 0:
-        print(f"   ✓ Copper falls when USD strengthens (β₁ < 0)")
-    if backtest_data['Model_Beta_PMI'].mean() > 0:
-        print(f"   ✓ Copper rises with Chinese PMI (β₂ > 0)")
-    if backtest_data['Model_Beta_STOCKS'].mean() < 0:
-        print(f"   ✓ Copper falls when inventories rise (β₃ < 0)")
-    
+
+    # summary prints
+    signals_generated = long_s + short_s + neut_s
+    print(f"\n   ✓ Generated {signals_generated} signals "
+          f"(LONG {long_s}, SHORT {short_s}, NEUTRAL {neut_s})")
+
+    if model_type != "logit":
+        print(f"   Avg R² (window in-sample): {np.nanmean(backtest_data['Model_R2']):.4f}")
+
+    if total_preds > 0:
+        hit_rate = hits / total_preds
+        print(f"   Directional hit-rate: {hit_rate*100:.2f}% "
+              f"({hits}/{total_preds})")
+
     print("="*80)
     return backtest_data
 
@@ -1749,7 +1816,7 @@ if __name__ == "__main__":
         print(f"   ⚠ WARNING: Insufficient data! Need {REGRESSION_WINDOW_DAYS - days_available} more days")
     
     # Step 2: Generate trading signals (only for backtest period)
-    backtest_data = generate_signals(data, backtest_start=BACKTEST_START, window_days=REGRESSION_WINDOW_DAYS)
+    backtest_data = generate_signals(data, backtest_start=BACKTEST_START, window_days=REGRESSION_WINDOW_DAYS, model_type = "ols")
     
     # Save processed data for inspection
     output_file = 'output/backtest_signals.csv'
