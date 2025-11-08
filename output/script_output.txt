@@ -58,44 +58,13 @@ LOADING AND PREPROCESSING DATA
    ✓ Sufficient data available
 
 ================================================================================
-GENERATING TRADING SIGNALS (3-FACTOR REGRESSION)
+GENERATING TRADING SIGNALS (model=ols, window=504d)
 ================================================================================
-
-Regression window: 504 days (~2.0 years)
-Signal threshold: ±0.1%
-Generating signals from: 2024-01-02
-
-Training period ends at index: 514 (2023-12-29)
-Signal generation starts at index: 515 (2024-01-02)
-Total signals to generate: 252
-
-Running rolling regression...
-   ⚠ IMPORTANT: Using t-1 data to predict t returns (no look-ahead bias)
-   Progress: 0.4% (1/252 days)   Progress: 20.2% (51/252 days)   Progress: 40.1% (101/252 days)   Progress: 59.9% (151/252 days)   Progress: 79.8% (201/252 days)   Progress: 99.6% (251/252 days)
-   ✓ Generated 252 trading signals
-
-[SIGNAL DISTRIBUTION]
-   LONG:      71 ( 28.2%)
-   SHORT:     44 ( 17.5%)
-   NEUTRAL:  137 ( 54.4%)
-   TOTAL:    252 (100.0%)
-
-[MODEL STATISTICS]
-   Average R²: 0.0417
-   Median R²:  0.0401
-   Average |Forecast|: 0.1126%
-   Max forecast: +0.3586%
-   Min forecast: -1.2315%
-
-[AVERAGE BETA COEFFICIENTS]
-   β₁ (DXY):    -0.068337
-   β₂ (PMI):    +1.156501
-   β₃ (STOCKS): -0.082248
-
-[INTERPRETATION]
-   ✓ Copper falls when USD strengthens (β₁ < 0)
-   ✓ Copper rises with Chinese PMI (β₂ > 0)
-   ✓ Copper falls when inventories rise (β₃ < 0)
+Signal threshold: ±0.03%  |  Start: 2024-01-02
+   Progress: 0.4%   R2@i=0.046   Hits=0/1   Progress: 20.2%   R2@i=0.047   Hits=27/51   Progress: 40.1%   R2@i=0.038   Hits=58/101   Progress: 59.9%   R2@i=0.052   Hits=83/151   Progress: 79.8%   R2@i=0.050   Hits=108/201   Progress: 99.6%   R2@i=0.053   Hits=137/251
+   ✓ Generated 252 signals (LONG 131, SHORT 77, NEUTRAL 44)
+   Avg R² (window in-sample): 0.0471
+   Directional hit-rate: 54.37% (137/252)
 ================================================================================
 
 ✓ Backtest data with signals saved to: output/backtest_signals.csv
@@ -216,14 +185,14 @@ RUNNING BACKTEST SIMULATION
 
 Starting simulation...
 Initial Equity: $10,000,000.00
-Risk per trade: 1.0%
-ATR Stop Multiplier: 1.5x
-   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $10,065,790   Progress: 15.9% (40/252 days) | Equity: $10,053,555   Progress: 23.8% (60/252 days) | Equity: $10,206,680   Progress: 31.7% (80/252 days) | Equity: $10,237,540   Progress: 39.7% (100/252 days) | Equity: $10,369,590   Progress: 47.6% (120/252 days) | Equity: $10,425,285   Progress: 55.6% (140/252 days) | Equity: $10,519,195   Progress: 63.5% (160/252 days) | Equity: $10,582,495   Progress: 71.4% (180/252 days) | Equity: $10,654,935   Progress: 79.4% (200/252 days) | Equity: $10,735,345   Progress: 87.3% (220/252 days) | Equity: $10,787,520   Progress: 95.2% (240/252 days) | Equity: $10,759,585
+Risk per trade: 3.0%
+ATR Stop Multiplier: 2.5x
+   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $10,200,465   Progress: 15.9% (40/252 days) | Equity: $9,892,015   Progress: 23.8% (60/252 days) | Equity: $10,257,190   Progress: 31.7% (80/252 days) | Equity: $10,179,585   Progress: 39.7% (100/252 days) | Equity: $10,535,835   Progress: 47.6% (120/252 days) | Equity: $10,689,905   Progress: 55.6% (140/252 days) | Equity: $10,427,720   Progress: 63.5% (160/252 days) | Equity: $10,552,155   Progress: 71.4% (180/252 days) | Equity: $10,704,295   Progress: 79.4% (200/252 days) | Equity: $10,925,205   Progress: 87.3% (220/252 days) | Equity: $11,203,740   Progress: 95.2% (240/252 days) | Equity: $11,130,450
 
 ✓ Backtest simulation complete!
-   Total positions: 79
-   Total rolls: 11
-   Final equity: $10,796,320.00
+   Total positions: 114
+   Total rolls: 12
+   Final equity: $11,042,400.00
 ================================================================================
 
 ================================================================================
@@ -236,29 +205,29 @@ BACKTEST SUMMARY - HG Copper Futures Strategy
 
 ----------------------------------PERFORMANCE-----------------------------------
 Initial Equity:              $10,000,000.00
-Final Equity:                $10,796,320.00
-Total Return:                7.96%
-Net P&L:                     $796,320.00
+Final Equity:                $11,042,400.00
+Total Return:                10.42%
+Net P&L:                     $1,042,400.00
 
 ---------------------------------P&L BREAKDOWN----------------------------------
-Directional P&L:             $866,000.00
-Roll P&L:                    $-55,500.00
-Transaction Costs:           -$69,680.00
+Directional P&L:             $1,272,500.00
+Roll P&L:                    $-168,250.00
+Transaction Costs:           -$230,100.00
   (Commission + Slippage @ $32.5/contract)
 
 --------------------------------TRADE STATISTICS--------------------------------
-Total Trades:                79
-Winning Trades:              56
-Losing Trades:               23
-Win Rate:                    70.89%
-Average Win:                 $23,914.46
-Average Loss:                $-23,603.91
-Profit Factor:               2.47
+Total Trades:                114
+Winning Trades:              66
+Losing Trades:               48
+Win Rate:                    57.89%
+Average Win:                 $59,049.70
+Average Loss:                $-59,476.67
+Profit Factor:               1.37
 
 ----------------------------------RISK METRICS----------------------------------
-Maximum Drawdown:            0.99%
-Sharpe Ratio (annualized):   2.08
-Number of Rolls:             11
+Maximum Drawdown:            4.77%
+Sharpe Ratio (annualized):   0.25
+Number of Rolls:             12
 ================================================================================
 
 
@@ -272,15 +241,15 @@ Number of Rolls:             11
    ✓ Performance chart saved to output/performance_chart.png
 
 [Additional Performance Metrics]
-   Total Trading Days: 241
-   Days in Position: 108
-   Days Flat: 133
-   Average Daily Return: 0.0192%
-   Daily Return Std Dev: 0.1455%
-   Best Day: 1.11% on 2024-07-18
-   Worst Day: -0.79% on 2024-08-15
-   Longest Win Streak: 2 days
-   Longest Loss Streak: 30 days
+   Total Trading Days: 240
+   Days in Position: 194
+   Days Flat: 46
+   Average Daily Return: 0.0086%
+   Daily Return Std Dev: 0.4319%
+   Best Day: 2.44% on 2024-05-15
+   Worst Day: -1.90% on 2024-02-26
+   Longest Win Streak: 5 days
+   Longest Loss Streak: 21 days
 
 ================================================================================
 
