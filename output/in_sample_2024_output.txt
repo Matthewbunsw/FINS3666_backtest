@@ -3,9 +3,10 @@
 ================================================================================
                FINS3666 - HG COPPER FUTURES BACKTEST
                     3-Factor Regression Strategy
+                         [IN_SAMPLE_2024]
 ================================================================================
 
-Output is being saved to: output/script_output.txt
+Output is being saved to: output/in_sample_2024_output.txt
 
 Backtest Period: 2024-01-02 to 2024-12-31
 Data Loading Period: 2021-12-13 to 2024-12-31
@@ -62,7 +63,7 @@ GENERATING TRADING SIGNALS (3-FACTOR REGRESSION)
 ================================================================================
 
 Regression window: 504 days (~2.0 years)
-Signal threshold: ±0.2%
+Signal threshold: ±0.05%
 Generating signals from: 2024-01-02
 
 Training period ends at index: 514 (2023-12-29)
@@ -75,9 +76,9 @@ Running rolling regression...
    ✓ Generated 252 trading signals
 
 [SIGNAL DISTRIBUTION]
-   LONG:      15 (  6.0%)
-   SHORT:     15 (  6.0%)
-   NEUTRAL:  222 ( 88.1%)
+   LONG:     116 ( 46.0%)
+   SHORT:     63 ( 25.0%)
+   NEUTRAL:   73 ( 29.0%)
    TOTAL:    252 (100.0%)
 
 [MODEL STATISTICS]
@@ -98,7 +99,7 @@ Running rolling regression...
    ✓ Copper falls when inventories rise (β₃ < 0)
 ================================================================================
 
-✓ Backtest data with signals saved to: output/backtest_signals.csv
+✓ Backtest data with signals saved to: output/in_sample_2024_signals.csv
 
 [Loading FND Calendar]
    ✓ Loaded 24 contract FND dates
@@ -217,13 +218,13 @@ RUNNING BACKTEST SIMULATION
 Starting simulation...
 Initial Equity: $10,000,000.00
 Risk per trade: 1.0%
-ATR Stop Multiplier: 1.5x
-   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $10,020,090   Progress: 15.9% (40/252 days) | Equity: $9,955,030   Progress: 23.8% (60/252 days) | Equity: $10,069,660   Progress: 31.7% (80/252 days) | Equity: $10,128,805   Progress: 39.7% (100/252 days) | Equity: $10,165,040   Progress: 47.6% (120/252 days) | Equity: $10,250,625   Progress: 55.6% (140/252 days) | Equity: $10,381,930   Progress: 63.5% (160/252 days) | Equity: $10,359,565   Progress: 71.4% (180/252 days) | Equity: $10,448,450   Progress: 79.4% (200/252 days) | Equity: $10,448,450   Progress: 87.3% (220/252 days) | Equity: $10,407,780   Progress: 95.2% (240/252 days) | Equity: $10,407,780
+ATR Stop Multiplier: 2.0x
+   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $10,088,625   Progress: 15.9% (40/252 days) | Equity: $9,988,825   Progress: 23.8% (60/252 days) | Equity: $10,178,435   Progress: 31.7% (80/252 days) | Equity: $10,224,575   Progress: 39.7% (100/252 days) | Equity: $10,345,180   Progress: 47.6% (120/252 days) | Equity: $10,458,160   Progress: 55.6% (140/252 days) | Equity: $10,339,355   Progress: 63.5% (160/252 days) | Equity: $10,448,735   Progress: 71.4% (180/252 days) | Equity: $10,580,340   Progress: 79.4% (200/252 days) | Equity: $10,773,260   Progress: 87.3% (220/252 days) | Equity: $10,880,345   Progress: 95.2% (240/252 days) | Equity: $10,915,625
 
 ✓ Backtest simulation complete!
-   Total positions: 29
-   Total rolls: 3
-   Final equity: $10,407,780.00
+   Total positions: 99
+   Total rolls: 12
+   Final equity: $10,948,310.00
 ================================================================================
 
 ================================================================================
@@ -236,29 +237,29 @@ BACKTEST SUMMARY - HG Copper Futures Strategy
 
 ----------------------------------PERFORMANCE-----------------------------------
 Initial Equity:              $10,000,000.00
-Final Equity:                $10,407,780.00
-Total Return:                4.08%
-Net P&L:                     $407,780.00
+Final Equity:                $10,948,310.00
+Total Return:                9.48%
+Net P&L:                     $948,310.00
 
 ---------------------------------P&L BREAKDOWN----------------------------------
-Directional P&L:             $442,750.00
-Roll P&L:                    $-27,250.00
-Transaction Costs:           -$34,970.00
+Directional P&L:             $1,054,000.00
+Roll P&L:                    $-78,000.00
+Transaction Costs:           -$105,690.00
   (Commission + Slippage @ $32.5/contract)
 
 --------------------------------TRADE STATISTICS--------------------------------
-Total Trades:                29
-Winning Trades:              22
-Losing Trades:               7
-Win Rate:                    75.86%
-Average Win:                 $25,675.45
-Average Loss:                $-22,440.00
-Profit Factor:               3.60
+Total Trades:                99
+Winning Trades:              62
+Losing Trades:               37
+Win Rate:                    62.63%
+Average Win:                 $32,175.81
+Average Loss:                $-28,286.22
+Profit Factor:               1.91
 
 ----------------------------------RISK METRICS----------------------------------
-Maximum Drawdown:            0.47%
-Sharpe Ratio (annualized):   1.97
-Number of Rolls:             3
+Maximum Drawdown:            1.38%
+Sharpe Ratio (annualized):   0.80
+Number of Rolls:             12
 ================================================================================
 
 
@@ -272,17 +273,17 @@ Number of Rolls:             3
    ✓ Performance chart saved to output/performance_chart.png
 
 [Additional Performance Metrics]
-   Total Trading Days: 249
-   Days in Position: 30
-   Days Flat: 219
-   Average Daily Return: 0.0103%
-   Daily Return Std Dev: 0.0832%
-   Best Day: 0.52% on 2024-03-15
-   Worst Day: -0.41% on 2024-02-23
-   Longest Win Streak: 1 days
-   Longest Loss Streak: 72 days
+   Total Trading Days: 240
+   Days in Position: 168
+   Days Flat: 72
+   Average Daily Return: 0.0097%
+   Daily Return Std Dev: 0.1844%
+   Best Day: 0.78% on 2024-03-15
+   Worst Day: -0.79% on 2024-02-26
+   Longest Win Streak: 3 days
+   Longest Loss Streak: 30 days
 
 ================================================================================
 
 ================================================================================
-BACKTEST COMPLETE
+IN_SAMPLE_2024 BACKTEST COMPLETE

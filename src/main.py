@@ -52,6 +52,12 @@ from config import (
     BACKTEST_END,
     INITIAL_EQUITY,
     STOP_LIMIT_ENABLED,
+    STOP_LIMIT_BAND_TICKS,
+    STOP_LIMIT_BAND_MULTIPLIER,
+    TRAILING_STOP_ENABLED,
+    COMMISSION,
+    SLIPPAGE,
+    TOTAL_TRANSACTION_COST,
     DXY_FILE,
     PMI_FILE,
     HG_FRONT_FILE,
@@ -1710,33 +1716,45 @@ def generate_backtest_summary(results):
 # MAIN EXECUTION
 # ============================================================================
 
-if __name__ == "__main__":
+def run_single_backtest(period_name, backtest_start, backtest_end, initial_equity):
+    """
+    Run a single backtest for a given period
+    
+    Args:
+        period_name: Name of the period (e.g., "IN_SAMPLE_2024", "OUT_OF_SAMPLE_2025")
+        backtest_start: Start date for backtest
+        backtest_end: End date for backtest
+        initial_equity: Starting equity
+    
+    Returns:
+        BacktestResults object
+    """
     # Set up logging to file
-    log_filename = f'output/script_output.txt'
+    log_filename = f'output/{period_name.lower()}_output.txt'
     sys.stdout = ConsoleLogger(log_filename)
     
     print("\n")
     print("="*80)
     print(" " * 15 + "FINS3666 - HG COPPER FUTURES BACKTEST")
     print(" " * 20 + "3-Factor Regression Strategy")
+    print(" " * 25 + f"[{period_name}]")
     print("="*80)
     print(f"\nOutput is being saved to: {log_filename}")
-    
     
     # Calculate how far back we need to load data
     # Need 504 trading days (~2 years) before backtest start
     # 504 trading days ≈ 720 calendar days (accounting for weekends/holidays)
-    backtest_start_date = pd.to_datetime(BACKTEST_START)
+    backtest_start_date = pd.to_datetime(backtest_start)
     data_start_date = backtest_start_date - timedelta(days=750)  # Extra buffer
     DATA_START = data_start_date.strftime('%Y-%m-%d')
     
-    print(f"\nBacktest Period: {BACKTEST_START} to {BACKTEST_END}")
-    print(f"Data Loading Period: {DATA_START} to {BACKTEST_END}")
+    print(f"\nBacktest Period: {backtest_start} to {backtest_end}")
+    print(f"Data Loading Period: {DATA_START} to {backtest_end}")
     print(f"  (Need ~2 years of history for rolling regression)")
-    print(f"Initial Equity: ${INITIAL_EQUITY:,.0f}")
+    print(f"Initial Equity: ${initial_equity:,.0f}")
     
     # Step 1: Load and preprocess data (includes training period)
-    data = load_and_preprocess_data(start_date=DATA_START, end_date=BACKTEST_END)
+    data = load_and_preprocess_data(start_date=DATA_START, end_date=backtest_end)
     
     # Verify we have enough data
     days_available = len(data)
@@ -1749,10 +1767,10 @@ if __name__ == "__main__":
         print(f"   ⚠ WARNING: Insufficient data! Need {REGRESSION_WINDOW_DAYS - days_available} more days")
     
     # Step 2: Generate trading signals (only for backtest period)
-    backtest_data = generate_signals(data, backtest_start=BACKTEST_START, window_days=REGRESSION_WINDOW_DAYS)
+    backtest_data = generate_signals(data, backtest_start=backtest_start, window_days=REGRESSION_WINDOW_DAYS)
     
     # Save processed data for inspection
-    output_file = 'output/backtest_signals.csv'
+    output_file = f'output/{period_name.lower()}_signals.csv'
     backtest_data.to_csv(output_file, index=False)
     print(f"\n✓ Backtest data with signals saved to: {output_file}")
     
@@ -1760,7 +1778,7 @@ if __name__ == "__main__":
     fnd_calendar = load_fnd_calendar()
     
     # Step 4: Build contract database
-    contract_data = build_contract_database(fnd_calendar, DATA_START, BACKTEST_END)
+    contract_data = build_contract_database(fnd_calendar, DATA_START, backtest_end)
     
     # Step 5: Add ATR and overnight spread to all contracts
     print("\n[Calculating ATR and overnight spreads for all contracts]")
@@ -1770,15 +1788,140 @@ if __name__ == "__main__":
     print("   ✓ ATR and overnight spreads calculated for all contracts")
     
     # Step 6: Run backtest
-    results = run_backtest(backtest_data, contract_data, fnd_calendar, INITIAL_EQUITY)
+    results = run_backtest(backtest_data, contract_data, fnd_calendar, initial_equity)
     
-    # Step 7: Generate comprehensive summary with charts
+    # Step 7: Generate comprehensive summary with charts (will save to output/)
+    # Temporarily rename output files to include period name
+    import config
+    original_positions = config.POSITIONS_OUTPUT
+    original_rolls = config.ROLLS_OUTPUT
+    original_daily = config.DAILY_OUTPUT
+    original_summary = config.SUMMARY_OUTPUT
+    
+    config.POSITIONS_OUTPUT = f'output/{period_name.lower()}_positions.csv'
+    config.ROLLS_OUTPUT = f'output/{period_name.lower()}_rolls.csv'
+    config.DAILY_OUTPUT = f'output/{period_name.lower()}_daily_metrics.csv'
+    config.SUMMARY_OUTPUT = f'output/{period_name.lower()}_summary.csv'
+    
     generate_backtest_summary(results)
     
+    # Restore original output paths
+    config.POSITIONS_OUTPUT = original_positions
+    config.ROLLS_OUTPUT = original_rolls
+    config.DAILY_OUTPUT = original_daily
+    config.SUMMARY_OUTPUT = original_summary
+    
     print("\n" + "="*80)
-    print("BACKTEST COMPLETE")
+    print(f"{period_name} BACKTEST COMPLETE")
     
     # Close the log file
     sys.stdout.close()
     sys.stdout = sys.stdout.terminal
-    print(f"\n✓ Output saved to: {log_filename}")
+    print(f"\n✓ {period_name} output saved to: {log_filename}")
+    
+    return results
+
+
+if __name__ == "__main__":
+    print("\n" + "="*80)
+    print(" " * 10 + "FINS3666 - HG COPPER FUTURES STRATEGY BACKTEST")
+    print(" " * 15 + "Running Both In-Sample and Out-of-Sample Tests")
+    print("="*80)
+    
+    # ========================================================================
+    # RUN 1: IN-SAMPLE PERIOD (2024)
+    # ========================================================================
+    print("\n" + "🔵 "*40)
+    print("RUNNING IN-SAMPLE BACKTEST (2024)")
+    print("🔵 "*40 + "\n")
+    
+    results_2024 = run_single_backtest(
+        period_name="IN_SAMPLE_2024",
+        backtest_start='2024-01-02',
+        backtest_end='2024-12-31',
+        initial_equity=INITIAL_EQUITY
+    )
+    
+    # ========================================================================
+    # RUN 2: OUT-OF-SAMPLE PERIOD (2025)
+    # ========================================================================
+    print("\n" + "🟢 "*40)
+    print("RUNNING OUT-OF-SAMPLE BACKTEST (2025)")
+    print("🟢 "*40 + "\n")
+    
+    results_2025 = run_single_backtest(
+        period_name="OUT_OF_SAMPLE_2025",
+        backtest_start='2025-01-02',
+        backtest_end='2025-10-31',
+        initial_equity=INITIAL_EQUITY
+    )
+    
+    # ========================================================================
+    # COMBINED SUMMARY
+    # ========================================================================
+    print("\n\n" + "="*80)
+    print(" " * 25 + "COMBINED RESULTS SUMMARY")
+    print("="*80)
+    
+    print(f"\n{'IN-SAMPLE (2024)':-^40} | {'OUT-OF-SAMPLE (2025)':-^40}")
+    print("-"*80)
+    print(f"{'Initial Equity:':<30} ${results_2024.initial_equity:>12,.0f} | ${results_2025.initial_equity:>12,.0f}")
+    print(f"{'Final Equity:':<30} ${results_2024.final_equity:>12,.0f} | ${results_2025.final_equity:>12,.0f}")
+    print(f"{'Total Return:':<30} {results_2024.total_return:>11.2f}% | {results_2025.total_return:>11.2f}%")
+    print(f"{'Net P&L:':<30} ${results_2024.net_pnl:>12,.0f} | ${results_2025.net_pnl:>12,.0f}")
+    print("-"*80)
+    print(f"{'Win Rate:':<30} {results_2024.win_rate*100:>11.2f}% | {results_2025.win_rate*100:>11.2f}%")
+    print(f"{'Profit Factor:':<30} {results_2024.profit_factor:>15.2f} | {results_2025.profit_factor:>15.2f}")
+    print(f"{'Sharpe Ratio:':<30} {results_2024.sharpe_ratio:>15.2f} | {results_2025.sharpe_ratio:>15.2f}")
+    print(f"{'Max Drawdown:':<30} {results_2024.max_drawdown:>11.2f}% | {results_2025.max_drawdown:>11.2f}%")
+    print("-"*80)
+    print(f"{'Total Trades:':<30} {results_2024.total_trades:>15} | {results_2025.total_trades:>15}")
+    print(f"{'Number of Rolls:':<30} {len(results_2024.roll_events):>15} | {len(results_2025.roll_events):>15}")
+    print("="*80)
+    
+    # ========================================================================
+    # STRATEGY PARAMETERS
+    # ========================================================================
+    print("\n" + "="*80)
+    print(" " * 25 + "STRATEGY PARAMETERS USED")
+    print("="*80)
+    print(f"\n{'Signal Generation:':<40}")
+    print(f"   Signal Threshold:                    ±{SIGNAL_THRESHOLD}%")
+    print(f"   Regression Window:                   {REGRESSION_WINDOW_DAYS} days (~{REGRESSION_WINDOW_DAYS/252:.1f} years)")
+    print(f"\n{'Risk Management:':<40}")
+    print(f"   ATR Period:                          {ATR_PERIOD} days")
+    print(f"   ATR Stop Multiplier:                 {ATR_STOP_MULTIPLIER}x")
+    print(f"   Risk per Trade:                      {RISK_PERCENT*100}%")
+    print(f"   Trailing Stop:                       {'Enabled' if TRAILING_STOP_ENABLED else 'Disabled'}")
+    print(f"   Stop-Limit Orders:                   {'Enabled' if STOP_LIMIT_ENABLED else 'Disabled'}")
+    if STOP_LIMIT_ENABLED:
+        print(f"      - Limit Band (min):               {STOP_LIMIT_BAND_TICKS} ticks (${STOP_LIMIT_BAND_TICKS * 0.0005}/lb)")
+        print(f"      - Limit Band (multiplier):        {STOP_LIMIT_BAND_MULTIPLIER}x avg overnight spread")
+    print(f"\n{'Position Sizing (Carry Filter):':<40}")
+    print(f"   Half Position Threshold:             ${CARRY_THRESHOLD_HALF}/lb")
+    print(f"   Quarter Position Threshold:          ${CARRY_THRESHOLD_QUARTER}/lb")
+    print(f"\n{'Contract Rolling:':<40}")
+    print(f"   Days Before FND to Roll:             {DAYS_BEFORE_FND_TO_ROLL} days")
+    print(f"\n{'Transaction Costs:':<40}")
+    print(f"   Commission per Contract:             ${COMMISSION:.2f}")
+    print(f"   Slippage per Contract:               ${SLIPPAGE:.2f}")
+    print(f"   Total per Round-Turn:                ${TOTAL_TRANSACTION_COST:.2f}")
+    print("="*80)
+    
+    print("\n📁 Output Files Generated:")
+    print("   In-Sample (2024):")
+    print("      - output/in_sample_2024_output.txt")
+    print("      - output/in_sample_2024_positions.csv")
+    print("      - output/in_sample_2024_rolls.csv")
+    print("      - output/in_sample_2024_daily_metrics.csv")
+    print("      - output/in_sample_2024_signals.csv")
+    print("\n   Out-of-Sample (2025):")
+    print("      - output/out_of_sample_2025_output.txt")
+    print("      - output/out_of_sample_2025_positions.csv")
+    print("      - output/out_of_sample_2025_rolls.csv")
+    print("      - output/out_of_sample_2025_daily_metrics.csv")
+    print("      - output/out_of_sample_2025_signals.csv")
+    
+    print("\n" + "="*80)
+    print("✅ ALL BACKTESTS COMPLETE")
+    print("="*80 + "\n")

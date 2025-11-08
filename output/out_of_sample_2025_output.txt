@@ -3,12 +3,13 @@
 ================================================================================
                FINS3666 - HG COPPER FUTURES BACKTEST
                     3-Factor Regression Strategy
+                         [OUT_OF_SAMPLE_2025]
 ================================================================================
 
-Output is being saved to: output/script_output.txt
+Output is being saved to: output/out_of_sample_2025_output.txt
 
-Backtest Period: 2024-01-02 to 2024-12-31
-Data Loading Period: 2021-12-13 to 2024-12-31
+Backtest Period: 2025-01-02 to 2025-10-31
+Data Loading Period: 2022-12-14 to 2025-10-31
   (Need ~2 years of history for rolling regression)
 Initial Equity: $10,000,000
 
@@ -34,8 +35,8 @@ LOADING AND PREPROCESSING DATA
    ✓ Date range: 2021-01-04 to 2025-10-31
 
 [5/5] Merging all datasets...
-   ✓ Merged dataset: 767 observations
-   ✓ Backtest period: 2021-12-13 to 2024-12-31
+   ✓ Merged dataset: 723 observations
+   ✓ Backtest period: 2022-12-14 to 2025-10-31
    ✓ Features: ['Date', 'HG_Price', 'HG1_logret', 'DXY_Price', 'DXY_logret', 'PMI', 'PMI_change', 'LME_Stocks', 'STOCKS_logret']
 
 [DATA QUALITY CHECK]
@@ -53,7 +54,7 @@ LOADING AND PREPROCESSING DATA
 ================================================================================
 
 [DATA AVAILABILITY CHECK]
-   Days loaded: 767
+   Days loaded: 723
    Days needed for regression: 504
    ✓ Sufficient data available
 
@@ -62,35 +63,35 @@ GENERATING TRADING SIGNALS (3-FACTOR REGRESSION)
 ================================================================================
 
 Regression window: 504 days (~2.0 years)
-Signal threshold: ±0.2%
-Generating signals from: 2024-01-02
+Signal threshold: ±0.05%
+Generating signals from: 2025-01-02
 
-Training period ends at index: 514 (2023-12-29)
-Signal generation starts at index: 515 (2024-01-02)
-Total signals to generate: 252
+Training period ends at index: 513 (2024-12-31)
+Signal generation starts at index: 514 (2025-01-02)
+Total signals to generate: 209
 
 Running rolling regression...
    ⚠ IMPORTANT: Using t-1 data to predict t returns (no look-ahead bias)
-   Progress: 0.4% (1/252 days)   Progress: 20.2% (51/252 days)   Progress: 40.1% (101/252 days)   Progress: 59.9% (151/252 days)   Progress: 79.8% (201/252 days)   Progress: 99.6% (251/252 days)
-   ✓ Generated 252 trading signals
+   Progress: 0.5% (1/209 days)   Progress: 24.4% (51/209 days)   Progress: 48.3% (101/209 days)   Progress: 72.2% (151/209 days)   Progress: 96.2% (201/209 days)
+   ✓ Generated 209 trading signals
 
 [SIGNAL DISTRIBUTION]
-   LONG:      15 (  6.0%)
-   SHORT:     15 (  6.0%)
-   NEUTRAL:  222 ( 88.1%)
-   TOTAL:    252 (100.0%)
+   LONG:     127 ( 60.8%)
+   SHORT:     47 ( 22.5%)
+   NEUTRAL:   35 ( 16.7%)
+   TOTAL:    209 (100.0%)
 
 [MODEL STATISTICS]
-   Average R²: 0.0417
-   Median R²:  0.0401
-   Average |Forecast|: 0.1126%
-   Max forecast: +0.3586%
-   Min forecast: -1.2315%
+   Average R²: 0.0491
+   Median R²:  0.0489
+   Average |Forecast|: 0.2051%
+   Max forecast: +0.8346%
+   Min forecast: -1.3683%
 
 [AVERAGE BETA COEFFICIENTS]
-   β₁ (DXY):    -0.068337
-   β₂ (PMI):    +1.156501
-   β₃ (STOCKS): -0.082248
+   β₁ (DXY):    -0.126424
+   β₂ (PMI):    +3.433904
+   β₃ (STOCKS): -0.120332
 
 [INTERPRETATION]
    ✓ Copper falls when USD strengthens (β₁ < 0)
@@ -98,7 +99,7 @@ Running rolling regression...
    ✓ Copper falls when inventories rise (β₃ < 0)
 ================================================================================
 
-✓ Backtest data with signals saved to: output/backtest_signals.csv
+✓ Backtest data with signals saved to: output/out_of_sample_2025_signals.csv
 
 [Loading FND Calendar]
    ✓ Loaded 24 contract FND dates
@@ -109,100 +110,100 @@ LOADING CONTRACT DATABASE
 ================================================================================
 
 [Loading HGF24]
-   ✓ Loaded 310 observations
-   ✓ Date range: 2022-11-02 to 2024-01-29
+   ✓ Loaded 281 observations
+   ✓ Date range: 2022-12-14 to 2024-01-29
 
 [Loading HGG24]
-   ✓ Loaded 330 observations
-   ✓ Date range: 2022-11-02 to 2024-02-27
+   ✓ Loaded 301 observations
+   ✓ Date range: 2022-12-14 to 2024-02-27
 
 [Loading HGH24]
-   ✓ Loaded 350 observations
-   ✓ Date range: 2022-11-02 to 2024-03-26
+   ✓ Loaded 321 observations
+   ✓ Date range: 2022-12-14 to 2024-03-26
 
 [Loading HGJ24]
-   ✓ Loaded 372 observations
-   ✓ Date range: 2022-11-02 to 2024-04-26
+   ✓ Loaded 343 observations
+   ✓ Date range: 2022-12-14 to 2024-04-26
 
 [Loading HGK24]
-   ✓ Loaded 394 observations
-   ✓ Date range: 2022-11-02 to 2024-05-29
+   ✓ Loaded 365 observations
+   ✓ Date range: 2022-12-14 to 2024-05-29
 
 [Loading HGM24]
-   ✓ Loaded 413 observations
-   ✓ Date range: 2022-11-02 to 2024-06-26
+   ✓ Loaded 384 observations
+   ✓ Date range: 2022-12-14 to 2024-06-26
 
 [Loading HGN24]
-   ✓ Loaded 435 observations
-   ✓ Date range: 2022-11-02 to 2024-07-29
+   ✓ Loaded 406 observations
+   ✓ Date range: 2022-12-14 to 2024-07-29
 
 [Loading HGQ24]
-   ✓ Loaded 457 observations
-   ✓ Date range: 2022-11-02 to 2024-08-28
+   ✓ Loaded 428 observations
+   ✓ Date range: 2022-12-14 to 2024-08-28
 
 [Loading HGU24]
-   ✓ Loaded 477 observations
-   ✓ Date range: 2022-11-02 to 2024-09-26
+   ✓ Loaded 448 observations
+   ✓ Date range: 2022-12-14 to 2024-09-26
 
 [Loading HGV24]
-   ✓ Loaded 500 observations
-   ✓ Date range: 2022-11-02 to 2024-10-29
+   ✓ Loaded 471 observations
+   ✓ Date range: 2022-12-14 to 2024-10-29
 
 [Loading HGX24]
-   ✓ Loaded 502 observations
-   ✓ Date range: 2022-11-29 to 2024-11-26
+   ✓ Loaded 491 observations
+   ✓ Date range: 2022-12-14 to 2024-11-26
 
 [Loading HGZ24]
-   ✓ Loaded 541 observations
-   ✓ Date range: 2022-11-02 to 2024-12-27
+   ✓ Loaded 512 observations
+   ✓ Date range: 2022-12-14 to 2024-12-27
 
 [Loading HGF25]
-   ✓ Loaded 484 observations
-   ✓ Date range: 2023-01-30 to 2024-12-31
+   ✓ Loaded 502 observations
+   ✓ Date range: 2023-01-30 to 2025-01-29
 
 [Loading HGG25]
-   ✓ Loaded 465 observations
-   ✓ Date range: 2023-02-27 to 2024-12-31
+   ✓ Loaded 502 observations
+   ✓ Date range: 2023-02-27 to 2025-02-26
 
 [Loading HGH25]
-   ✓ Loaded 543 observations
-   ✓ Date range: 2022-11-02 to 2024-12-31
+   ✓ Loaded 572 observations
+   ✓ Date range: 2022-12-14 to 2025-03-27
 
 [Loading HGJ25]
-   ✓ Loaded 423 observations
-   ✓ Date range: 2023-04-27 to 2024-12-31
+   ✓ Loaded 502 observations
+   ✓ Date range: 2023-04-27 to 2025-04-28
 
 [Loading HGK25]
-   ✓ Loaded 398 observations
-   ✓ Date range: 2023-06-02 to 2024-12-31
+   ✓ Loaded 498 observations
+   ✓ Date range: 2023-06-02 to 2025-05-28
 
 [Loading HGM25]
-   ✓ Loaded 380 observations
-   ✓ Date range: 2023-06-29 to 2024-12-31
+   ✓ Loaded 500 observations
+   ✓ Date range: 2023-06-29 to 2025-06-26
 
 [Loading HGN25]
-   ✓ Loaded 543 observations
-   ✓ Date range: 2022-11-02 to 2024-12-31
+   ✓ Loaded 656 observations
+   ✓ Date range: 2022-12-14 to 2025-07-29
 
 [Loading HGQ25]
-   ✓ Loaded 337 observations
-   ✓ Date range: 2023-08-30 to 2024-12-31
+   ✓ Loaded 500 observations
+   ✓ Date range: 2023-08-30 to 2025-08-27
 
 [Loading HGU25]
-   ✓ Loaded 543 observations
-   ✓ Date range: 2022-11-02 to 2024-12-31
+   ✓ Loaded 698 observations
+   ✓ Date range: 2022-12-14 to 2025-09-26
 
 [Loading HGV25]
-   ✓ Loaded 295 observations
-   ✓ Date range: 2023-10-30 to 2024-12-31
+   ✓ Loaded 502 observations
+   ✓ Date range: 2023-10-30 to 2025-10-29
 
 [Loading HGX25]
-   ✓ Loaded 274 observations
-   ✓ Date range: 2023-11-29 to 2024-12-31
+   ✓ Loaded 483 observations
+   ✓ Date range: 2023-11-29 to 2025-10-31
 
 [Loading HGZ25]
-   ✓ Loaded 543 observations
-   ✓ Date range: 2022-11-02 to 2024-12-31
+   ✓ Loaded 723 observations
+   ✓ Date range: 2022-12-14 to 2025-10-31
 
 ✓ Total contracts loaded: 24
 ================================================================================
@@ -217,13 +218,13 @@ RUNNING BACKTEST SIMULATION
 Starting simulation...
 Initial Equity: $10,000,000.00
 Risk per trade: 1.0%
-ATR Stop Multiplier: 1.5x
-   Progress: 0.0% (0/252 days) | Equity: $10,000,000   Progress: 7.9% (20/252 days) | Equity: $10,020,090   Progress: 15.9% (40/252 days) | Equity: $9,955,030   Progress: 23.8% (60/252 days) | Equity: $10,069,660   Progress: 31.7% (80/252 days) | Equity: $10,128,805   Progress: 39.7% (100/252 days) | Equity: $10,165,040   Progress: 47.6% (120/252 days) | Equity: $10,250,625   Progress: 55.6% (140/252 days) | Equity: $10,381,930   Progress: 63.5% (160/252 days) | Equity: $10,359,565   Progress: 71.4% (180/252 days) | Equity: $10,448,450   Progress: 79.4% (200/252 days) | Equity: $10,448,450   Progress: 87.3% (220/252 days) | Equity: $10,407,780   Progress: 95.2% (240/252 days) | Equity: $10,407,780
+ATR Stop Multiplier: 2.0x
+   Progress: 0.0% (0/209 days) | Equity: $10,000,000   Progress: 9.6% (20/209 days) | Equity: $10,032,575   Progress: 19.1% (40/209 days) | Equity: $10,177,260   Progress: 28.7% (60/209 days) | Equity: $10,338,785   Progress: 38.3% (80/209 days) | Equity: $10,293,745   Progress: 47.8% (100/209 days) | Equity: $10,295,500   Progress: 57.4% (120/209 days) | Equity: $10,350,460   Progress: 67.0% (140/209 days) | Equity: $10,196,620   Progress: 76.6% (160/209 days) | Equity: $10,108,615   Progress: 86.1% (180/209 days) | Equity: $10,258,350   Progress: 95.7% (200/209 days) | Equity: $10,245,880
 
 ✓ Backtest simulation complete!
-   Total positions: 29
-   Total rolls: 3
-   Final equity: $10,407,780.00
+   Total positions: 62
+   Total rolls: 9
+   Final equity: $10,223,360.00
 ================================================================================
 
 ================================================================================
@@ -236,29 +237,29 @@ BACKTEST SUMMARY - HG Copper Futures Strategy
 
 ----------------------------------PERFORMANCE-----------------------------------
 Initial Equity:              $10,000,000.00
-Final Equity:                $10,407,780.00
-Total Return:                4.08%
-Net P&L:                     $407,780.00
+Final Equity:                $10,223,360.00
+Total Return:                2.23%
+Net P&L:                     $223,360.00
 
 ---------------------------------P&L BREAKDOWN----------------------------------
-Directional P&L:             $442,750.00
-Roll P&L:                    $-27,250.00
-Transaction Costs:           -$34,970.00
+Directional P&L:             $259,500.00
+Roll P&L:                    $-71,750.00
+Transaction Costs:           -$36,140.00
   (Commission + Slippage @ $32.5/contract)
 
 --------------------------------TRADE STATISTICS--------------------------------
-Total Trades:                29
-Winning Trades:              22
-Losing Trades:               7
-Win Rate:                    75.86%
-Average Win:                 $25,675.45
-Average Loss:                $-22,440.00
-Profit Factor:               3.60
+Total Trades:                62
+Winning Trades:              32
+Losing Trades:               30
+Win Rate:                    51.61%
+Average Win:                 $28,882.81
+Average Loss:                $-23,363.00
+Profit Factor:               1.32
 
 ----------------------------------RISK METRICS----------------------------------
-Maximum Drawdown:            0.47%
-Sharpe Ratio (annualized):   1.97
-Number of Rolls:             3
+Maximum Drawdown:            3.04%
+Sharpe Ratio (annualized):   -0.11
+Number of Rolls:             9
 ================================================================================
 
 
@@ -272,17 +273,17 @@ Number of Rolls:             3
    ✓ Performance chart saved to output/performance_chart.png
 
 [Additional Performance Metrics]
-   Total Trading Days: 249
-   Days in Position: 30
-   Days Flat: 219
-   Average Daily Return: 0.0103%
-   Daily Return Std Dev: 0.0832%
-   Best Day: 0.52% on 2024-03-15
-   Worst Day: -0.41% on 2024-02-23
-   Longest Win Streak: 1 days
-   Longest Loss Streak: 72 days
+   Total Trading Days: 177
+   Days in Position: 143
+   Days Flat: 34
+   Average Daily Return: -0.0010%
+   Daily Return Std Dev: 0.2058%
+   Best Day: 1.11% on 2025-04-03
+   Worst Day: -1.71% on 2025-07-14
+   Longest Win Streak: 3 days
+   Longest Loss Streak: 32 days
 
 ================================================================================
 
 ================================================================================
-BACKTEST COMPLETE
+OUT_OF_SAMPLE_2025 BACKTEST COMPLETE
