@@ -222,10 +222,39 @@ def create_july_august_analysis_chart(daily_metrics, hg_continuous, positions):
     )
     
     # ========================================================================
+    # Mark Grasberg Mine Collapse (September 8, 2025)
+    # ========================================================================
+    grasberg_event = pd.Timestamp('2025-09-08')
+    
+    # Add vertical line for mine collapse
+    ax1.axvline(x=grasberg_event, color='brown', linestyle='--', 
+               linewidth=2.5, alpha=0.7, zorder=4)
+    
+    # Find the HG price on September 8 for positioning
+    sept_8_price = hg_continuous[hg_continuous['Date'] == grasberg_event]['HG_Price'].values
+    if len(sept_8_price) > 0:
+        y_pos_grasberg = sept_8_price[0]
+    else:
+        # Use midpoint of y-axis if price not available
+        y_pos_grasberg = (ax1.get_ylim()[0] + ax1.get_ylim()[1]) / 2
+    
+    ax1.annotate(
+        'Grasberg Mine Collapse\nSeptember 8, 2025\nSupply disruption',
+        xy=(grasberg_event, y_pos_grasberg),
+        xytext=(15, -70),
+        textcoords='offset points',
+        fontsize=9,
+        fontweight='bold',
+        color='saddlebrown',
+        bbox=dict(boxstyle='round,pad=0.5', facecolor='wheat', 
+                 edgecolor='brown', alpha=0.9, linewidth=2),
+        arrowprops=dict(arrowstyle='->', color='brown', lw=2)
+    )
+    
+    # ========================================================================
     # Title and Legend
     # ========================================================================
-    plt.title('Out-of-Sample 2025 Loss Analysis: HG Price vs Strategy P&L\n' + 
-              'Hypothesis: External Shock from Trade Policy Announcement',
+    plt.title('Out-of-Sample 2025 Loss Analysis: HG Price vs Strategy P&L\n',
               fontsize=14, fontweight='bold', pad=20)
     
     # Combine legends
@@ -234,14 +263,7 @@ def create_july_august_analysis_chart(daily_metrics, hg_continuous, positions):
     
     # Add custom legend entries for Position #36 markers and Trump announcement
     from matplotlib.lines import Line2D
-    custom_lines = [
-        Line2D([0], [0], marker='v', color='w', markerfacecolor='red', 
-               markersize=10, label='Position #36 Entry (SHORT)', markeredgecolor='black'),
-        Line2D([0], [0], marker='x', color='w', markerfacecolor='darkred', 
-               markersize=10, label='Position #36 Exit', markeredgewidth=2),
-        Line2D([0], [0], color='orange', linestyle='--', linewidth=2.5,
-               label='Trump Tariff Announcement')
-    ]
+    custom_lines = []
     
     ax1.legend(lines1 + lines2 + custom_lines, 
               labels1 + labels2 + [l.get_label() for l in custom_lines],
@@ -257,29 +279,7 @@ def create_july_august_analysis_chart(daily_metrics, hg_continuous, positions):
     # ========================================================================
     # Statistics Box
     # ========================================================================
-    total_pnl_period = daily_july_aug['cumulative_pnl'].iloc[-1] - daily_july_aug['cumulative_pnl'].iloc[0]
-    num_trades = len(positions_july_aug)
-    winning_trades = (positions_july_aug['net_pnl'] > 0).sum()
-    losing_trades = (positions_july_aug['net_pnl'] < 0).sum()
-    
-    hg_price_change = ((hg_july_aug['HG_Price'].iloc[-1] / hg_july_aug['HG_Price'].iloc[0]) - 1) * 100
-    
-    stats_text = (
-        f"Jun-Sep 2025 Statistics:\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"Period P&L: ${total_pnl_period:,.0f}\n"
-        f"Total Trades: {num_trades}\n"
-        f"Winning: {winning_trades} | Losing: {losing_trades}\n"
-        f"HG Price Change: {hg_price_change:+.2f}%\n"
-        f"Start Price: ${hg_july_aug['HG_Price'].iloc[0]:.2f}/lb\n"
-        f"End Price: ${hg_july_aug['HG_Price'].iloc[-1]:.2f}/lb"
-    )
-    
-    ax1.text(0.98, 0.02, stats_text, transform=ax1.transAxes,
-            fontsize=9, verticalalignment='bottom', horizontalalignment='right',
-            bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8),
-            family='monospace')
-    
+   
     plt.tight_layout()
     
     # Save chart
@@ -292,52 +292,6 @@ def create_july_august_analysis_chart(daily_metrics, hg_continuous, positions):
     
     return positions_july_aug, total_pnl_period
 
-# ============================================================================
-# DETAILED TRADE ANALYSIS
-# ============================================================================
-
-def print_trade_analysis(positions_july_aug):
-    """Print detailed analysis of trades during June-September"""
-    
-    print("\n" + "="*80)
-    print("JUNE-SEPTEMBER 2025 TRADE ANALYSIS")
-    print("="*80)
-    
-    print(f"\nTotal Trades in Period: {len(positions_july_aug)}")
-    print(f"Winning Trades: {(positions_july_aug['net_pnl'] > 0).sum()}")
-    print(f"Losing Trades: {(positions_july_aug['net_pnl'] < 0).sum()}")
-    print(f"Total P&L: ${positions_july_aug['net_pnl'].sum():,.2f}")
-    
-    print("\n" + "-"*80)
-    print("TOP 5 WORST TRADES:")
-    print("-"*80)
-    
-    worst_trades = positions_july_aug.nsmallest(5, 'net_pnl')
-    
-    for idx, (_, trade) in enumerate(worst_trades.iterrows(), 1):
-        print(f"\n#{idx} - Position ID: {trade['position_id']}")
-        print(f"   Direction: {trade['direction']} | Contracts: {trade['num_contracts']}")
-        print(f"   Entry: {trade['entry_date'].strftime('%Y-%m-%d')} @ ${trade['entry_price']:.2f}/lb")
-        print(f"   Exit:  {trade['exit_date'].strftime('%Y-%m-%d')} @ ${trade['exit_price']:.2f}/lb")
-        print(f"   Exit Reason: {trade['exit_reason']}")
-        print(f"   Net P&L: ${trade['net_pnl']:,.2f}")
-        print(f"   Holding Days: {trade['holding_days']}")
-        
-        price_move = ((trade['exit_price'] / trade['entry_price']) - 1) * 100
-        print(f"   Price Move: {price_move:+.2f}%")
-    
-    print("\n" + "-"*80)
-    print("TOP 3 BEST TRADES:")
-    print("-"*80)
-    
-    best_trades = positions_july_aug.nlargest(3, 'net_pnl')
-    
-    for idx, (_, trade) in enumerate(best_trades.iterrows(), 1):
-        print(f"\n#{idx} - Position ID: {trade['position_id']}")
-        print(f"   Direction: {trade['direction']} | Contracts: {trade['num_contracts']}")
-        print(f"   Entry: {trade['entry_date'].strftime('%Y-%m-%d')} @ ${trade['entry_price']:.2f}/lb")
-        print(f"   Exit:  {trade['exit_date'].strftime('%Y-%m-%d')} @ ${trade['exit_price']:.2f}/lb")
-        print(f"   Net P&L: ${trade['net_pnl']:,.2f}")
 
 # ============================================================================
 # MAIN EXECUTION
@@ -372,9 +326,6 @@ def main():
     positions_july_aug_filtered, total_pnl = create_july_august_analysis_chart(
         daily_metrics, hg_continuous, positions_july_aug
     )
-    
-    # Print detailed trade analysis
-    print_trade_analysis(positions_july_aug)
     
     # Summary statistics
     print("\n" + "="*80)

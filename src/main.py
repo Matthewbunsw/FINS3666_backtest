@@ -1704,6 +1704,7 @@ def generate_backtest_summary(results):
     # ========================================================================
     # 3. GENERATE SEPARATE PERFORMANCE CHARTS
     # ========================================================================
+    
     if len(result_dfs['daily']) > 0:
         print("\n[Generating Performance Charts]")
         
@@ -1877,6 +1878,161 @@ def generate_backtest_summary(results):
     
     print("\n" + "="*80)
 
+def plot_signal_distribution_pie(backtest_data, outpath="output/signal_distribution.png"):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+
+    # Compute distribution from data
+    counts = backtest_data['Signal'].value_counts(dropna=False)
+
+    labels = ['Neutral', 'Long', 'Short']
+    values = [
+        counts.get('NEUTRAL', 0),
+        counts.get('LONG', 0),
+        counts.get('SHORT', 0),
+    ]
+
+    # Color palette (professional but visually appealing)
+    colors = ['#4C72B0',  '#55A868', '#C44E52']  
+    # blue, green, red
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    # Slight donut effect (looks good in reports)
+    wedges, texts, autotexts = ax.pie(
+        values,
+        labels=labels,
+        autopct='%1.1f%%',
+        startangle=90,
+        pctdistance=0.75,
+        labeldistance=1.05,
+        colors=colors,
+        wedgeprops=dict(width=0.35, edgecolor='white', linewidth=1.2)
+    )
+
+    # Improve text contrast & professionalism
+    for t in autotexts:
+        t.set_color("white")
+        t.set_fontweight("bold")
+
+    ax.set_title('Signal Distribution', fontsize=14, pad=14)
+    ax.axis('equal')
+
+    plt.tight_layout()
+    plt.savefig(outpath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_factor_miniplots(data, outpath="output/factors_three_panel.png"):
+    """Three stacked mini-plots for your drivers over time."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+
+    df = data.copy()
+    df['Date'] = pd.to_datetime(df['Date'])
+
+    fig, axes = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+    fig.suptitle('Drivers Overview', y=0.98, fontsize=14)
+
+    axes[0].plot(df['Date'], df['DXY_logret'], linewidth=1.2)
+    axes[0].set_ylabel('DXY\nLog Returns')
+    axes[0].grid(alpha=0.25)
+
+    axes[1].plot(df['Date'], df['PMI_change'], linewidth=1.2)
+    axes[1].set_ylabel('PMI\nΔ (Daily Interp.)')
+    axes[1].grid(alpha=0.25)
+
+    axes[2].plot(df['Date'], df['STOCKS_logret'], linewidth=1.2)
+    axes[2].set_ylabel('LME Stocks\nLog Returns')
+    axes[2].grid(alpha=0.25)
+    axes[2].set_xlabel('Date')
+
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.savefig(outpath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_pnl_waterfall(outpath="output/pnl_waterfall.png",
+                       directional=866000, roll_pnl=-55500, tx_costs=-69680):
+    """Waterfall: Start at $0 → Directional → Roll → Costs → Total."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    
+    steps = ['Start', 'Directional P&L', 'Roll P&L', 'Transaction Costs', 'Total Net P&L']
+    vals  = [0, directional, roll_pnl, tx_costs]  # last bar is computed total
+
+    # cumulative bases for intermediate bars
+    bases = np.concatenate(([0], np.cumsum(vals[:-1])))
+    totals = np.cumsum(vals)[-1]  # final total (e.g., 796,320)
+
+    # Build bar heights; final bar is total from zero
+    heights = [vals[1], vals[2], vals[3], totals]  # omit the initial 0 bar
+
+    # Colors: green for positive, red for negative; final total in a neutral dark
+    colors = []
+    for h in heights[:-1]:
+        colors.append('#2ca02c' if h >= 0 else '#d62728')
+    colors.append('#1f77b4')  # total
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Draw intermediate bars
+    x = np.arange(len(steps))
+    # Start bar (invisible baseline)
+    ax.bar(x[0], 0, color='none')
+
+    # Directional / Roll / Costs (stacked on their bases)
+    ax.bar(x[1], heights[0], bottom=bases[1], color=colors[0], width=0.6)
+    ax.bar(x[2], heights[1], bottom=bases[2], color=colors[1], width=0.6)
+    ax.bar(x[3], heights[2], bottom=bases[3], color=colors[2], width=0.6)
+
+    # Connector lines between bars
+    for i in range(1, 4):
+        y = bases[i] + max(0, heights[i-1])
+        ax.plot([x[i]-0.3, x[i]+0.3], [y, y], color='gray', linewidth=1)
+
+    # Final total bar (from zero)
+    ax.bar(x[4], heights[3], bottom=0, color=colors[3], width=0.6)
+
+    # Labels & formatting
+    ax.set_xticks(x)
+    ax.set_xticklabels(steps, rotation=0)
+    ax.set_ylabel('P&L (USD)')
+    ax.set_title('P&L Attribution Waterfall')
+
+    # Value annotations
+    def fmt_usd(v): 
+        return f"${v:,.0f}"
+    ann = [
+        (x[1], bases[1] + heights[0]),   # Directional
+        (x[2], bases[2] + (heights[1] if heights[1] > 0 else 0)),  # Roll
+        (x[3], bases[3] + (heights[2] if heights[2] > 0 else 0)),  # Costs
+        (x[4], heights[3])               # Total
+    ]
+    texts = [directional, roll_pnl, tx_costs, np.sum(vals)]
+    va = ['bottom', 'top' if roll_pnl < 0 else 'bottom', 'top' if tx_costs < 0 else 'bottom', 'bottom']
+    for (xi, yi), v, valign in zip(ann, texts, va):
+        ax.text(xi, yi + (20000 if valign=='bottom' else -20000), fmt_usd(v),
+                ha='center', va=valign, fontsize=10)
+
+    # Currency y-axis
+    ax.get_yaxis().set_major_formatter(
+        plt.FuncFormatter(lambda n, _: f'${n:,.0f}')
+    )
+    ax.grid(axis='y', alpha=0.25)
+    plt.tight_layout()
+    plt.savefig(outpath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
 
 # ============================================================================
 # MAIN EXECUTION
@@ -1978,6 +2134,10 @@ def run_single_backtest(period_name, backtest_start, backtest_end, initial_equit
     config.DAILY_OUTPUT = f'{period_dir}/daily_metrics.csv'
     config.SUMMARY_OUTPUT = f'{period_dir}/summary.csv'
     config.CHART_OUTPUT = f'{period_dir}/performance_chart.png'
+
+    plot_signal_distribution_pie(backtest_data)
+    plot_factor_miniplots(data)
+    plot_pnl_waterfall()
     
     generate_backtest_summary(results)
     
