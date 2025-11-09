@@ -2,6 +2,9 @@
 Data models and logging structures for FINS3666 HG Copper Futures Backtest
 
 Contains all dataclasses for trades, positions, rolls, and results tracking.
+
+AI Use Declaration:
+- Claude and ChatGPT models were used to assist in code generation and debugging.
 """
 
 import pandas as pd

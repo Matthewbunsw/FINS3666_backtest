@@ -2,6 +2,9 @@
 Configuration file for FINS3666 HG Copper Futures Backtest
 
 Contains all constants, enums, and configuration parameters.
+
+AI Use Declaration:
+- Claude and ChatGPT models were used to assist in code generation and debugging.
 """
 
 from enum import Enum

@@ -3,6 +3,9 @@ FINS3666 High Grade Copper Futures (HG) Trading Strategy Backtest
 
 This backtest implements a 3-factor regression model for copper futures trading
 with carry-based position sizing and roll management.
+
+AI Use Declaration:
+- Claude and ChatGPT models were used to assist in code generation and debugging.
 """
 
 import pandas as pd
@@ -104,23 +107,26 @@ def load_and_preprocess_data(start_date='2021-01-04', end_date='2025-10-31'):
     print(f"   ✓ Date range: {dxy['Date'].min().date()} to {dxy['Date'].max().date()}")
     
     # ========================================================================
-    # 2. Load China PMI (Monthly) and interpolate to daily
+    # 2. Load China PMI (Monthly) and forward-fill to daily
     # ========================================================================
     print("\n[2/4] Loading PMI data...")
     pmi = pd.read_csv(PMI_FILE)
     pmi['Date'] = pd.to_datetime(pmi['Date'], format='%m/%d/%Y')
     pmi = pmi.sort_values('Date').reset_index(drop=True)
     pmi = pmi.rename(columns={'PMI Manufacturing *': 'PMI'})
+    
+    # Calculate PMI_change BEFORE resampling (using actual monthly values)
+    pmi['PMI_change'] = pmi['PMI'].diff()
+    
     print(f"   ✓ Loaded {len(pmi)} monthly PMI observations")
     
-    # Interpolate to daily frequency
-    print("   ⟳ Interpolating monthly PMI to daily...")
-    pmi_daily = pmi.set_index('Date').resample('D').interpolate(method='linear')
+    # Forward-fill to daily frequency (preserves monthly PMI_change, avoids look-ahead bias)
+    print("   ⟳ Resampling monthly PMI to daily (forward-fill)...")
+    pmi_daily = pmi.set_index('Date').resample('D').ffill()
     pmi_daily = pmi_daily.reset_index()
     
-    # Calculate level change (today - yesterday)
-    pmi_daily['PMI_change'] = pmi_daily['PMI'].diff()
-    print(f"   ✓ Interpolated to {len(pmi_daily)} daily observations")
+    print(f"   ✓ Resampled to {len(pmi_daily)} daily observations")
+    print(f"   ✓ Date range: {pmi_daily['Date'].min().date()} to {pmi_daily['Date'].max().date()}")
     
     # ========================================================================
     # 3. Load HG Front Continuous (Settlement Price)
