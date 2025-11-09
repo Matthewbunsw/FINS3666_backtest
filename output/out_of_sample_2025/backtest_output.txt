@@ -298,7 +298,9 @@ Number of Rolls:             9
    ✓ Summary statistics exported to output/out_of_sample_2025/summary.csv
 
 [Generating Performance Charts]
-   ✓ Performance chart saved to output/out_of_sample_2025/performance_chart.png
+   ✓ Equity curve saved to output/out_of_sample_2025/charts/equity_curve.png
+   ✓ Cumulative P&L saved to output/out_of_sample_2025/charts/cumulative_pnl.png
+   ✓ Daily returns saved to output/out_of_sample_2025/charts/daily_returns.png
 
 [Additional Performance Metrics]
    Total Trading Days: 177

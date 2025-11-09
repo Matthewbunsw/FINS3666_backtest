@@ -1702,32 +1702,39 @@ def generate_backtest_summary(results):
     print(f"   ✓ Summary statistics exported to {SUMMARY_OUTPUT}")
     
     # ========================================================================
-    # 3. GENERATE EQUITY CURVE & RETURNS CHART
+    # 3. GENERATE SEPARATE PERFORMANCE CHARTS
     # ========================================================================
     if len(result_dfs['daily']) > 0:
         print("\n[Generating Performance Charts]")
         
+        # Create charts subdirectory
+        try:
+            from config import CHART_OUTPUT
+            charts_dir = CHART_OUTPUT.replace('performance_chart.png', 'charts')
+        except (ImportError, AttributeError):
+            charts_dir = 'output/charts'
+        
+        import os
+        os.makedirs(charts_dir, exist_ok=True)
+        
         daily_df = result_dfs['daily'].copy()
         daily_df['date'] = pd.to_datetime(daily_df['date'])
         
-        # Create figure with 3 subplots
-        fig, axes = plt.subplots(3, 1, figsize=(14, 12))
-        fig.suptitle('HG Copper Futures Backtest - Performance Analysis', 
-                     fontsize=16, fontweight='bold', y=0.995)
+        # ====================================================================
+        # Chart 1: Equity Curve
+        # ====================================================================
+        fig1, ax1 = plt.subplots(figsize=(14, 6))
         
-        # ====================================================================
-        # Subplot 1: Equity Curve
-        # ====================================================================
-        ax1 = axes[0]
         ax1.plot(daily_df['date'], daily_df['equity'], 
                 linewidth=2, color='#2E86AB', label='Equity')
         ax1.axhline(y=results.initial_equity, color='gray', 
                    linestyle='--', alpha=0.7, label='Initial Equity')
         
-        ax1.set_title('Account Equity Over Time', fontsize=12, fontweight='bold', pad=10)
-        ax1.set_ylabel('Equity ($)', fontsize=10)
+        ax1.set_title('Account Equity Over Time', fontsize=14, fontweight='bold', pad=15)
+        ax1.set_xlabel('Date', fontsize=11)
+        ax1.set_ylabel('Equity ($)', fontsize=11)
         ax1.grid(True, alpha=0.3)
-        ax1.legend(loc='best')
+        ax1.legend(loc='best', fontsize=10)
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         ax1.xaxis.set_major_locator(mdates.MonthLocator())
         
@@ -1738,17 +1745,28 @@ def generate_backtest_summary(results):
         metrics_text = (
             f"Initial: ${results.initial_equity:,.0f}\n"
             f"Final: ${results.final_equity:,.0f}\n"
-            f"Return: {results.total_return:.2f}%\n"
-            f"Max DD: {results.max_drawdown:.2f}%"
+            f"Total Return: {results.total_return:.2f}%\n"
+            f"Annualized Return: {results.annualized_return:.2f}%\n"
+            f"Max Drawdown: {results.max_drawdown:.2f}%\n"
+            f"Sharpe Ratio: {results.annualized_sharpe_ratio:.2f}"
         )
         ax1.text(0.02, 0.98, metrics_text, transform=ax1.transAxes,
                 fontsize=9, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        equity_chart = f'{charts_dir}/equity_curve.png'
+        plt.savefig(equity_chart, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"   ✓ Equity curve saved to {equity_chart}")
+        
         # ====================================================================
-        # Subplot 2: Cumulative P&L
+        # Chart 2: Cumulative P&L
         # ====================================================================
-        ax2 = axes[1]
+        fig2, ax2 = plt.subplots(figsize=(14, 6))
+        
         ax2.plot(daily_df['date'], daily_df['cumulative_pnl'], 
                 linewidth=2, color='#A23B72', label='Cumulative P&L')
         ax2.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
@@ -1759,18 +1777,38 @@ def generate_backtest_summary(results):
                          where=(daily_df['cumulative_pnl'] < 0), 
                          color='red', alpha=0.3, label='Loss')
         
-        ax2.set_title('Cumulative P&L', fontsize=12, fontweight='bold', pad=10)
-        ax2.set_ylabel('Cumulative P&L ($)', fontsize=10)
+        ax2.set_title('Cumulative Profit & Loss', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_xlabel('Date', fontsize=11)
+        ax2.set_ylabel('Cumulative P&L ($)', fontsize=11)
         ax2.grid(True, alpha=0.3)
-        ax2.legend(loc='best')
+        ax2.legend(loc='best', fontsize=10)
         ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         ax2.xaxis.set_major_locator(mdates.MonthLocator())
         ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x:,.0f}'))
         
+        # Add P&L metrics text box
+        pnl_text = (
+            f"Net P&L: ${results.net_pnl:,.0f}\n"
+            f"Directional P&L: ${results.total_directional_pnl:,.0f}\n"
+            f"Roll P&L: ${results.total_roll_pnl:,.0f}\n"
+            f"Transaction Costs: ${results.total_transaction_costs:,.0f}"
+        )
+        ax2.text(0.02, 0.98, pnl_text, transform=ax2.transAxes,
+                fontsize=9, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        pnl_chart = f'{charts_dir}/cumulative_pnl.png'
+        plt.savefig(pnl_chart, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"   ✓ Cumulative P&L saved to {pnl_chart}")
+        
         # ====================================================================
-        # Subplot 3: Daily Returns Distribution
+        # Chart 3: Daily Returns Distribution
         # ====================================================================
-        ax3 = axes[2]
+        fig3, ax3 = plt.subplots(figsize=(14, 6))
         
         # Calculate daily returns (%)
         daily_df['daily_return_pct'] = (daily_df['daily_total_pnl'] / 
@@ -1783,9 +1821,9 @@ def generate_backtest_summary(results):
                color=colors, alpha=0.6, width=1.0)
         ax3.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
         
-        ax3.set_title('Daily Returns (%)', fontsize=12, fontweight='bold', pad=10)
-        ax3.set_xlabel('Date', fontsize=10)
-        ax3.set_ylabel('Daily Return (%)', fontsize=10)
+        ax3.set_title('Daily Returns Distribution', fontsize=14, fontweight='bold', pad=15)
+        ax3.set_xlabel('Date', fontsize=11)
+        ax3.set_ylabel('Daily Return (%)', fontsize=11)
         ax3.grid(True, alpha=0.3, axis='y')
         ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         ax3.xaxis.set_major_locator(mdates.MonthLocator())
@@ -1795,32 +1833,21 @@ def generate_backtest_summary(results):
             f"Mean: {daily_df['daily_return_pct'].mean():.3f}%\n"
             f"Std Dev: {daily_df['daily_return_pct'].std():.3f}%\n"
             f"Best Day: {daily_df['daily_return_pct'].max():.2f}%\n"
-            f"Worst Day: {daily_df['daily_return_pct'].min():.2f}%"
+            f"Worst Day: {daily_df['daily_return_pct'].min():.2f}%\n"
+            f"Win Days: {(daily_df['daily_return_pct'] > 0).sum()}\n"
+            f"Loss Days: {(daily_df['daily_return_pct'] < 0).sum()}"
         )
         ax3.text(0.02, 0.98, returns_stats, transform=ax3.transAxes,
                 fontsize=9, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
-        # ====================================================================
-        # Format and save
-        # ====================================================================
-        plt.tight_layout(rect=[0, 0, 1, 0.99])
+        plt.xticks(rotation=45)
+        plt.tight_layout()
         
-        # Rotate x-axis labels for better readability
-        for ax in axes:
-            ax.tick_params(axis='x', rotation=45)
-        
-        # Save chart - use config path if available, otherwise default
-        try:
-            from config import CHART_OUTPUT
-            chart_filename = CHART_OUTPUT
-        except (ImportError, AttributeError):
-            chart_filename = 'output/performance_chart.png'
-        
-        plt.savefig(chart_filename, dpi=300, bbox_inches='tight')
+        returns_chart = f'{charts_dir}/daily_returns.png'
+        plt.savefig(returns_chart, dpi=300, bbox_inches='tight')
         plt.close()
-        
-        print(f"   ✓ Performance chart saved to {chart_filename}")
+        print(f"   ✓ Daily returns saved to {returns_chart}")
         
         # ====================================================================
         # Additional Statistics
