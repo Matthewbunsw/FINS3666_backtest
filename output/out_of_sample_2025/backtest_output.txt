@@ -6,7 +6,7 @@
                          [OUT_OF_SAMPLE_2025]
 ================================================================================
 
-Output is being saved to: output/out_of_sample_2025_output.txt
+Output is being saved to: output/out_of_sample_2025/backtest_output.txt
 
 Backtest Period: 2025-01-02 to 2025-10-31
 Data Loading Period: 2022-12-14 to 2025-10-31
@@ -63,7 +63,7 @@ GENERATING TRADING SIGNALS (3-FACTOR REGRESSION)
 ================================================================================
 
 Regression window: 504 days (~2.0 years)
-Signal threshold: ±0.05%
+Signal threshold: ±0.1%
 Generating signals from: 2025-01-02
 
 Training period ends at index: 513 (2024-12-31)
@@ -76,9 +76,9 @@ Running rolling regression...
    ✓ Generated 209 trading signals
 
 [SIGNAL DISTRIBUTION]
-   LONG:     127 ( 60.8%)
-   SHORT:     47 ( 22.5%)
-   NEUTRAL:   35 ( 16.7%)
+   LONG:     112 ( 53.6%)
+   SHORT:     32 ( 15.3%)
+   NEUTRAL:   65 ( 31.1%)
    TOTAL:    209 (100.0%)
 
 [MODEL STATISTICS]
@@ -93,13 +93,39 @@ Running rolling regression...
    β₂ (PMI):    +3.433904
    β₃ (STOCKS): -0.120332
 
+[CORRELATION MATRIX]
+
+   Correlation Matrix (Pearson):
+   ----------------------------------------------------------------------
+   Variable        | HG Returns   | DXY          | PMI          | Stocks      
+   ----------------------------------------------------------------------
+   HG Returns      |       1.0000 |      -0.0586 |       0.0762 |      -0.2374
+   DXY             |      -0.0586 |       1.0000 |       0.0131 |       0.0151
+   PMI Change      |       0.0762 |       0.0131 |       1.0000 |      -0.1249
+   Stocks          |      -0.2374 |       0.0151 |      -0.1249 |       1.0000
+   ----------------------------------------------------------------------
+
+   Key Observations:
+   • HG vs DXY correlation:    -0.0586 (negative - inverse relationship)
+   • HG vs PMI correlation:    +0.0762 (positive - direct relationship)
+   • HG vs Stocks correlation: -0.2374 (negative - inverse relationship)
+
+   Multicollinearity Check (among predictors):
+   • DXY vs PMI:               +0.0131
+   • DXY vs Stocks:            +0.0151
+   • PMI vs Stocks:            -0.1249
+   ✓ Low multicollinearity (max |r| = 0.1249 < 0.5)
+
 [INTERPRETATION]
    ✓ Copper falls when USD strengthens (β₁ < 0)
    ✓ Copper rises with Chinese PMI (β₂ > 0)
    ✓ Copper falls when inventories rise (β₃ < 0)
 ================================================================================
 
-✓ Backtest data with signals saved to: output/out_of_sample_2025_signals.csv
+✓ Backtest data with signals saved to: output/out_of_sample_2025/signals.csv
+
+[Generating Regression Variables Correlation Matrix Chart]
+   ✓ Correlation matrix chart saved to output/out_of_sample_2025/correlation_matrix.png
 
 [Loading FND Calendar]
    ✓ Loaded 24 contract FND dates
@@ -218,13 +244,13 @@ RUNNING BACKTEST SIMULATION
 Starting simulation...
 Initial Equity: $10,000,000.00
 Risk per trade: 1.0%
-ATR Stop Multiplier: 2.0x
-   Progress: 0.0% (0/209 days) | Equity: $10,000,000   Progress: 9.6% (20/209 days) | Equity: $10,032,575   Progress: 19.1% (40/209 days) | Equity: $10,177,260   Progress: 28.7% (60/209 days) | Equity: $10,338,785   Progress: 38.3% (80/209 days) | Equity: $10,293,745   Progress: 47.8% (100/209 days) | Equity: $10,295,500   Progress: 57.4% (120/209 days) | Equity: $10,350,460   Progress: 67.0% (140/209 days) | Equity: $10,196,620   Progress: 76.6% (160/209 days) | Equity: $10,108,615   Progress: 86.1% (180/209 days) | Equity: $10,258,350   Progress: 95.7% (200/209 days) | Equity: $10,245,880
+ATR Stop Multiplier: 1.5x
+   Progress: 0.0% (0/209 days) | Equity: $10,000,000   Progress: 9.6% (20/209 days) | Equity: $10,015,270   Progress: 19.1% (40/209 days) | Equity: $10,081,715   Progress: 28.7% (60/209 days) | Equity: $10,133,630   Progress: 38.3% (80/209 days) | Equity: $10,053,865   Progress: 47.8% (100/209 days) | Equity: $10,041,140   Progress: 57.4% (120/209 days) | Equity: $10,062,785   Progress: 67.0% (140/209 days) | Equity: $9,762,555   Progress: 76.6% (160/209 days) | Equity: $9,719,740   Progress: 86.1% (180/209 days) | Equity: $9,826,560   Progress: 95.7% (200/209 days) | Equity: $9,772,905
 
 ✓ Backtest simulation complete!
-   Total positions: 62
+   Total positions: 61
    Total rolls: 9
-   Final equity: $10,223,360.00
+   Final equity: $9,772,580.00
 ================================================================================
 
 ================================================================================
@@ -237,51 +263,53 @@ BACKTEST SUMMARY - HG Copper Futures Strategy
 
 ----------------------------------PERFORMANCE-----------------------------------
 Initial Equity:              $10,000,000.00
-Final Equity:                $10,223,360.00
-Total Return:                2.23%
-Net P&L:                     $223,360.00
+Final Equity:                $9,772,580.00
+Total Return:                -2.27%
+Annualized Return:           -3.22%
+Net P&L:                     $-227,420.00
+Trading Period:              177 days (0.70 years)
 
 ---------------------------------P&L BREAKDOWN----------------------------------
-Directional P&L:             $259,500.00
-Roll P&L:                    $-71,750.00
-Transaction Costs:           -$36,140.00
+Directional P&L:             $-200,250.00
+Roll P&L:                    $-61,250.00
+Transaction Costs:           -$27,170.00
   (Commission + Slippage @ $32.5/contract)
 
 --------------------------------TRADE STATISTICS--------------------------------
-Total Trades:                62
-Winning Trades:              32
-Losing Trades:               30
-Win Rate:                    51.61%
-Average Win:                 $28,882.81
-Average Loss:                $-23,363.00
-Profit Factor:               1.32
+Total Trades:                61
+Winning Trades:              30
+Losing Trades:               31
+Win Rate:                    49.18%
+Average Win:                 $15,109.33
+Average Loss:                $-21,958.06
+Profit Factor:               0.67
 
 ----------------------------------RISK METRICS----------------------------------
-Maximum Drawdown:            3.04%
-Sharpe Ratio (annualized):   -0.11
+Maximum Drawdown:            4.14%
+Sharpe Ratio (annualized):   -1.09
 Number of Rolls:             9
 ================================================================================
 
 
 [Exporting Results to CSV]
-   ✓ Positions exported to output/positions.csv
-   ✓ Rolls exported to output/rolls.csv
-   ✓ Daily metrics exported to output/daily_metrics.csv
-   ✓ Summary statistics exported to output/summary.csv
+   ✓ Positions exported to output/out_of_sample_2025/positions.csv
+   ✓ Rolls exported to output/out_of_sample_2025/rolls.csv
+   ✓ Daily metrics exported to output/out_of_sample_2025/daily_metrics.csv
+   ✓ Summary statistics exported to output/out_of_sample_2025/summary.csv
 
 [Generating Performance Charts]
-   ✓ Performance chart saved to output/performance_chart.png
+   ✓ Performance chart saved to output/out_of_sample_2025/performance_chart.png
 
 [Additional Performance Metrics]
    Total Trading Days: 177
-   Days in Position: 143
-   Days Flat: 34
-   Average Daily Return: -0.0010%
-   Daily Return Std Dev: 0.2058%
-   Best Day: 1.11% on 2025-04-03
-   Worst Day: -1.71% on 2025-07-14
-   Longest Win Streak: 3 days
-   Longest Loss Streak: 32 days
+   Days in Position: 118
+   Days Flat: 59
+   Average Daily Return: -0.0151%
+   Daily Return Std Dev: 0.2229%
+   Best Day: 0.52% on 2025-09-04
+   Worst Day: -2.81% on 2025-07-14
+   Longest Win Streak: 1 days
+   Longest Loss Streak: 29 days
 
 ================================================================================
 

@@ -315,6 +315,52 @@ def generate_signals(data, backtest_start, window_days=504):
     print(f"   β₂ (PMI):    {backtest_data['Model_Beta_PMI'].mean():+.6f}")
     print(f"   β₃ (STOCKS): {backtest_data['Model_Beta_STOCKS'].mean():+.6f}")
     
+    # Correlation matrix
+    print(f"\n[CORRELATION MATRIX]")
+    feature_cols = ['HG1_logret', 'DXY_logret', 'PMI_change', 'STOCKS_logret']
+    corr_matrix = backtest_data[feature_cols].corr()
+    
+    # Print correlation matrix with formatting
+    print("\n   Correlation Matrix (Pearson):")
+    print("   " + "-" * 70)
+    header = f"   {'Variable':<15} | {'HG Returns':<12} | {'DXY':<12} | {'PMI':<12} | {'Stocks':<12}"
+    print(header)
+    print("   " + "-" * 70)
+    
+    var_names = ['HG Returns', 'DXY', 'PMI Change', 'Stocks']
+    for i, (idx, row) in enumerate(corr_matrix.iterrows()):
+        values = " | ".join([f"{val:>12.4f}" for val in row])
+        print(f"   {var_names[i]:<15} | {values}")
+    print("   " + "-" * 70)
+    
+    # Highlight key correlations
+    print(f"\n   Key Observations:")
+    hg_dxy_corr = corr_matrix.loc['HG1_logret', 'DXY_logret']
+    hg_pmi_corr = corr_matrix.loc['HG1_logret', 'PMI_change']
+    hg_stocks_corr = corr_matrix.loc['HG1_logret', 'STOCKS_logret']
+    
+    print(f"   • HG vs DXY correlation:    {hg_dxy_corr:+.4f} {'(negative - inverse relationship)' if hg_dxy_corr < 0 else '(positive)'}")
+    print(f"   • HG vs PMI correlation:    {hg_pmi_corr:+.4f} {'(positive - direct relationship)' if hg_pmi_corr > 0 else '(negative)'}")
+    print(f"   • HG vs Stocks correlation: {hg_stocks_corr:+.4f} {'(negative - inverse relationship)' if hg_stocks_corr < 0 else '(positive)'}")
+    
+    # Check for multicollinearity among predictors
+    print(f"\n   Multicollinearity Check (among predictors):")
+    dxy_pmi_corr = corr_matrix.loc['DXY_logret', 'PMI_change']
+    dxy_stocks_corr = corr_matrix.loc['DXY_logret', 'STOCKS_logret']
+    pmi_stocks_corr = corr_matrix.loc['PMI_change', 'STOCKS_logret']
+    
+    print(f"   • DXY vs PMI:               {dxy_pmi_corr:+.4f}")
+    print(f"   • DXY vs Stocks:            {dxy_stocks_corr:+.4f}")
+    print(f"   • PMI vs Stocks:            {pmi_stocks_corr:+.4f}")
+    
+    max_predictor_corr = max(abs(dxy_pmi_corr), abs(dxy_stocks_corr), abs(pmi_stocks_corr))
+    if max_predictor_corr < 0.5:
+        print(f"   ✓ Low multicollinearity (max |r| = {max_predictor_corr:.4f} < 0.5)")
+    elif max_predictor_corr < 0.7:
+        print(f"   ⚠ Moderate multicollinearity (max |r| = {max_predictor_corr:.4f})")
+    else:
+        print(f"   ⚠ High multicollinearity (max |r| = {max_predictor_corr:.4f} > 0.7)")
+    
     # Interpretation
     print(f"\n[INTERPRETATION]")
     if backtest_data['Model_Beta_DXY'].mean() < 0:
@@ -326,6 +372,92 @@ def generate_signals(data, backtest_start, window_days=504):
     
     print("="*80)
     return backtest_data
+
+
+def generate_correlation_matrix_chart(backtest_data, output_dir):
+    """
+    Generate correlation matrix heatmap for regression variables
+    
+    Args:
+        backtest_data: DataFrame with regression features and target
+        output_dir: Directory to save the chart
+    """
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    
+    print("\n[Generating Regression Variables Correlation Matrix Chart]")
+    
+    # Select regression variables
+    feature_cols = ['HG1_logret', 'DXY_logret', 'PMI_change', 'STOCKS_logret']
+    corr_matrix = backtest_data[feature_cols].corr()
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Create heatmap using matplotlib
+    im = ax.imshow(corr_matrix, cmap='RdBu_r', aspect='auto', vmin=-1, vmax=1)
+    
+    # Add colorbar
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Pearson Correlation Coefficient', rotation=270, labelpad=25, fontsize=11)
+    
+    # Add text annotations with correlation values
+    for i in range(len(corr_matrix)):
+        for j in range(len(corr_matrix)):
+            value = corr_matrix.iloc[i, j]
+            # Use white text for dark cells, black for light cells
+            text_color = 'white' if abs(value) > 0.5 else 'black'
+            text = ax.text(j, i, f'{value:.4f}',
+                         ha="center", va="center", color=text_color, 
+                         fontsize=12, fontweight='bold')
+    
+    # Add border to highlight top row (HG Returns correlations with predictors)
+    from matplotlib.patches import Rectangle
+    
+    # Highlight the top row (i=0) - correlations of predictors with HG Returns
+    for j in range(len(corr_matrix.columns)):
+        rect = Rectangle((j - 0.5, -0.5), 1, 1, 
+                        linewidth=8, edgecolor='black', facecolor='none')
+        ax.add_patch(rect)
+    
+    # Set ticks and labels
+    var_names = ['HG Returns', 'DXY Returns', 'PMI Change', 'LME Stocks']
+    ax.set_xticks(np.arange(len(corr_matrix.columns)))
+    ax.set_yticks(np.arange(len(corr_matrix.columns)))
+    ax.set_xticklabels(var_names, rotation=45, ha='right', fontsize=11)
+    ax.set_yticklabels(var_names, fontsize=11)
+    
+    # Add title
+    ax.set_title('Pearson Correlation Matrix - Regression Variables', 
+                fontsize=14, fontweight='bold', pad=20)
+    
+    # Add grid
+    ax.set_xticks(np.arange(len(corr_matrix.columns)) - 0.5, minor=True)
+    ax.set_yticks(np.arange(len(corr_matrix.columns)) - 0.5, minor=True)
+    ax.grid(which="minor", color="gray", linestyle='-', linewidth=2)
+    ax.tick_params(which="minor", size=0)
+    
+    # Add subtitle with key insights
+    # hg_dxy_corr = corr_matrix.loc['HG1_logret', 'DXY_logret']
+    # hg_pmi_corr = corr_matrix.loc['HG1_logret', 'PMI_change']
+    # hg_stocks_corr = corr_matrix.loc['HG1_logret', 'STOCKS_logret']
+    
+    # subtitle = (f"Key: HG-DXY={hg_dxy_corr:+.4f} | "
+    #            f"HG-PMI={hg_pmi_corr:+.4f} | "
+    #            f"HG-Stocks={hg_stocks_corr:+.4f}")
+    # ax.text(0.5, -0.15, subtitle, transform=ax.transAxes,
+    #        ha='center', fontsize=10, style='italic',
+    #        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
+    
+    plt.tight_layout()
+    
+    # Save chart
+    chart_filename = f'{output_dir}/correlation_matrix.png'
+    plt.savefig(chart_filename, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"   ✓ Correlation matrix chart saved to {chart_filename}")
 
 
 # ============================================================================
@@ -1546,26 +1678,28 @@ def generate_backtest_summary(results):
     print("\n[Exporting Results to CSV]")
     result_dfs = results.to_dataframes()
     
+    from config import POSITIONS_OUTPUT, ROLLS_OUTPUT, DAILY_OUTPUT, SUMMARY_OUTPUT
+    
     if len(result_dfs['positions']) > 0:
-        result_dfs['positions'].to_csv('output/positions.csv', index=False)
-        print("   ✓ Positions exported to output/positions.csv")
+        result_dfs['positions'].to_csv(POSITIONS_OUTPUT, index=False)
+        print(f"   ✓ Positions exported to {POSITIONS_OUTPUT}")
     else:
         print("   ⚠ No positions to export")
     
     if len(result_dfs['rolls']) > 0:
-        result_dfs['rolls'].to_csv('output/rolls.csv', index=False)
-        print("   ✓ Rolls exported to output/rolls.csv")
+        result_dfs['rolls'].to_csv(ROLLS_OUTPUT, index=False)
+        print(f"   ✓ Rolls exported to {ROLLS_OUTPUT}")
     else:
         print("   ⚠ No rolls to export")
     
     if len(result_dfs['daily']) > 0:
-        result_dfs['daily'].to_csv('output/daily_metrics.csv', index=False)
-        print("   ✓ Daily metrics exported to output/daily_metrics.csv")
+        result_dfs['daily'].to_csv(DAILY_OUTPUT, index=False)
+        print(f"   ✓ Daily metrics exported to {DAILY_OUTPUT}")
     else:
         print("   ⚠ No daily metrics to export")
     
-    result_dfs['summary'].to_csv('output/summary.csv')
-    print("   ✓ Summary statistics exported to output/summary.csv")
+    result_dfs['summary'].to_csv(SUMMARY_OUTPUT)
+    print(f"   ✓ Summary statistics exported to {SUMMARY_OUTPUT}")
     
     # ========================================================================
     # 3. GENERATE EQUITY CURVE & RETURNS CHART
@@ -1676,8 +1810,13 @@ def generate_backtest_summary(results):
         for ax in axes:
             ax.tick_params(axis='x', rotation=45)
         
-        # Save chart
-        chart_filename = 'output/performance_chart.png'
+        # Save chart - use config path if available, otherwise default
+        try:
+            from config import CHART_OUTPUT
+            chart_filename = CHART_OUTPUT
+        except (ImportError, AttributeError):
+            chart_filename = 'output/performance_chart.png'
+        
         plt.savefig(chart_filename, dpi=300, bbox_inches='tight')
         plt.close()
         
@@ -1729,8 +1868,14 @@ def run_single_backtest(period_name, backtest_start, backtest_end, initial_equit
     Returns:
         BacktestResults object
     """
+    import os
+    
+    # Create output directory for this period
+    period_dir = f'output/{period_name.lower()}'
+    os.makedirs(period_dir, exist_ok=True)
+    
     # Set up logging to file
-    log_filename = f'output/{period_name.lower()}_output.txt'
+    log_filename = f'{period_dir}/backtest_output.txt'
     sys.stdout = ConsoleLogger(log_filename)
     
     print("\n")
@@ -1770,9 +1915,12 @@ def run_single_backtest(period_name, backtest_start, backtest_end, initial_equit
     backtest_data = generate_signals(data, backtest_start=backtest_start, window_days=REGRESSION_WINDOW_DAYS)
     
     # Save processed data for inspection
-    output_file = f'output/{period_name.lower()}_signals.csv'
+    output_file = f'{period_dir}/signals.csv'
     backtest_data.to_csv(output_file, index=False)
     print(f"\n✓ Backtest data with signals saved to: {output_file}")
+    
+    # Step 2.5: Generate correlation matrix chart for regression variables
+    generate_correlation_matrix_chart(backtest_data, period_dir)
     
     # Step 3: Load FND calendar
     fnd_calendar = load_fnd_calendar()
@@ -1790,18 +1938,19 @@ def run_single_backtest(period_name, backtest_start, backtest_end, initial_equit
     # Step 6: Run backtest
     results = run_backtest(backtest_data, contract_data, fnd_calendar, initial_equity)
     
-    # Step 7: Generate comprehensive summary with charts (will save to output/)
-    # Temporarily rename output files to include period name
+    # Step 7: Generate comprehensive summary with charts (will save to period-specific folder)
+    # Temporarily rename output files to save in period-specific directory
     import config
     original_positions = config.POSITIONS_OUTPUT
     original_rolls = config.ROLLS_OUTPUT
     original_daily = config.DAILY_OUTPUT
     original_summary = config.SUMMARY_OUTPUT
     
-    config.POSITIONS_OUTPUT = f'output/{period_name.lower()}_positions.csv'
-    config.ROLLS_OUTPUT = f'output/{period_name.lower()}_rolls.csv'
-    config.DAILY_OUTPUT = f'output/{period_name.lower()}_daily_metrics.csv'
-    config.SUMMARY_OUTPUT = f'output/{period_name.lower()}_summary.csv'
+    config.POSITIONS_OUTPUT = f'{period_dir}/positions.csv'
+    config.ROLLS_OUTPUT = f'{period_dir}/rolls.csv'
+    config.DAILY_OUTPUT = f'{period_dir}/daily_metrics.csv'
+    config.SUMMARY_OUTPUT = f'{period_dir}/summary.csv'
+    config.CHART_OUTPUT = f'{period_dir}/performance_chart.png'
     
     generate_backtest_summary(results)
     
@@ -1868,11 +2017,13 @@ if __name__ == "__main__":
     print(f"{'Initial Equity:':<30} ${results_2024.initial_equity:>12,.0f} | ${results_2025.initial_equity:>12,.0f}")
     print(f"{'Final Equity:':<30} ${results_2024.final_equity:>12,.0f} | ${results_2025.final_equity:>12,.0f}")
     print(f"{'Total Return:':<30} {results_2024.total_return:>11.2f}% | {results_2025.total_return:>11.2f}%")
+    print(f"{'Annualized Return:':<30} {results_2024.annualized_return:>11.2f}% | {results_2025.annualized_return:>11.2f}%")
     print(f"{'Net P&L:':<30} ${results_2024.net_pnl:>12,.0f} | ${results_2025.net_pnl:>12,.0f}")
+    print(f"{'Trading Period:':<30} {results_2024.trading_days:>9} days | {results_2025.trading_days:>9} days")
     print("-"*80)
     print(f"{'Win Rate:':<30} {results_2024.win_rate*100:>11.2f}% | {results_2025.win_rate*100:>11.2f}%")
     print(f"{'Profit Factor:':<30} {results_2024.profit_factor:>15.2f} | {results_2025.profit_factor:>15.2f}")
-    print(f"{'Sharpe Ratio:':<30} {results_2024.sharpe_ratio:>15.2f} | {results_2025.sharpe_ratio:>15.2f}")
+    print(f"{'Sharpe Ratio (Annualized):':<30} {results_2024.annualized_sharpe_ratio:>15.2f} | {results_2025.annualized_sharpe_ratio:>15.2f}")
     print(f"{'Max Drawdown:':<30} {results_2024.max_drawdown:>11.2f}% | {results_2025.max_drawdown:>11.2f}%")
     print("-"*80)
     print(f"{'Total Trades:':<30} {results_2024.total_trades:>15} | {results_2025.total_trades:>15}")
@@ -1910,17 +2061,23 @@ if __name__ == "__main__":
     
     print("\n📁 Output Files Generated:")
     print("   In-Sample (2024):")
-    print("      - output/in_sample_2024_output.txt")
-    print("      - output/in_sample_2024_positions.csv")
-    print("      - output/in_sample_2024_rolls.csv")
-    print("      - output/in_sample_2024_daily_metrics.csv")
-    print("      - output/in_sample_2024_signals.csv")
+    print("      - output/in_sample_2024/backtest_output.txt")
+    print("      - output/in_sample_2024/positions.csv")
+    print("      - output/in_sample_2024/rolls.csv")
+    print("      - output/in_sample_2024/daily_metrics.csv")
+    print("      - output/in_sample_2024/summary.csv")
+    print("      - output/in_sample_2024/signals.csv")
+    print("      - output/in_sample_2024/performance_chart.png")
+    print("      - output/in_sample_2024/correlation_matrix.png")
     print("\n   Out-of-Sample (2025):")
-    print("      - output/out_of_sample_2025_output.txt")
-    print("      - output/out_of_sample_2025_positions.csv")
-    print("      - output/out_of_sample_2025_rolls.csv")
-    print("      - output/out_of_sample_2025_daily_metrics.csv")
-    print("      - output/out_of_sample_2025_signals.csv")
+    print("      - output/out_of_sample_2025/backtest_output.txt")
+    print("      - output/out_of_sample_2025/positions.csv")
+    print("      - output/out_of_sample_2025/rolls.csv")
+    print("      - output/out_of_sample_2025/daily_metrics.csv")
+    print("      - output/out_of_sample_2025/summary.csv")
+    print("      - output/out_of_sample_2025/signals.csv")
+    print("      - output/out_of_sample_2025/performance_chart.png")
+    print("      - output/out_of_sample_2025/correlation_matrix.png")
     
     print("\n" + "="*80)
     print("✅ ALL BACKTESTS COMPLETE")

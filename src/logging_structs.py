@@ -344,6 +344,7 @@ class BacktestResults:
     initial_equity: float = 0.0
     final_equity: float = 0.0
     total_return: float = 0.0
+    annualized_return: float = 0.0
     
     # P&L breakdown
     total_directional_pnl: float = 0.0
@@ -364,6 +365,11 @@ class BacktestResults:
     # Risk metrics
     max_drawdown: float = 0.0
     sharpe_ratio: float = 0.0
+    annualized_sharpe_ratio: float = 0.0
+    
+    # Period tracking
+    trading_days: int = 0
+    years_traded: float = 0.0
     
     def calculate_summary_statistics(self):
         """Calculate all summary statistics from position and daily logs"""
@@ -385,6 +391,22 @@ class BacktestResults:
         # Final equity
         self.final_equity = self.initial_equity + self.net_pnl
         self.total_return = (self.final_equity / self.initial_equity - 1) * 100
+        
+        # Calculate annualized return
+        if self.daily_metrics and len(self.daily_metrics) > 1:
+            self.trading_days = len(self.daily_metrics)
+            self.years_traded = self.trading_days / 252.0  # 252 trading days per year
+            
+            if self.years_traded > 0:
+                # Annualized return: (1 + total_return)^(1/years) - 1
+                total_return_decimal = self.total_return / 100.0
+                self.annualized_return = (((1 + total_return_decimal) ** (1 / self.years_traded)) - 1) * 100
+            else:
+                self.annualized_return = 0.0
+        else:
+            self.trading_days = 0
+            self.years_traded = 0.0
+            self.annualized_return = 0.0
         
         # Trade statistics
         self.total_trades = len(closed_positions)
@@ -416,7 +438,20 @@ class BacktestResults:
             daily_returns = [m.daily_total_pnl / m.equity if m.equity > 0 else 0 
                            for m in self.daily_metrics]
             if np.std(daily_returns) > 0:
-                self.sharpe_ratio = np.mean(daily_returns) / np.std(daily_returns) * np.sqrt(252)
+                # Daily Sharpe ratio
+                daily_sharpe = np.mean(daily_returns) / np.std(daily_returns)
+                
+                # Annualized Sharpe ratio (multiply by sqrt(252))
+                self.annualized_sharpe_ratio = daily_sharpe * np.sqrt(252)
+                
+                # Keep the original sharpe_ratio as annualized for backward compatibility
+                self.sharpe_ratio = self.annualized_sharpe_ratio
+            else:
+                self.sharpe_ratio = 0.0
+                self.annualized_sharpe_ratio = 0.0
+        else:
+            self.sharpe_ratio = 0.0
+            self.annualized_sharpe_ratio = 0.0
     
     def print_summary(self):
         """Print backtest summary to console"""
@@ -428,7 +463,9 @@ class BacktestResults:
         print(f"Initial Equity:              ${self.initial_equity:,.2f}")
         print(f"Final Equity:                ${self.final_equity:,.2f}")
         print(f"Total Return:                {self.total_return:.2f}%")
+        print(f"Annualized Return:           {self.annualized_return:.2f}%")
         print(f"Net P&L:                     ${self.net_pnl:,.2f}")
+        print(f"Trading Period:              {self.trading_days} days ({self.years_traded:.2f} years)")
         
         print(f"\n{'P&L BREAKDOWN':-^80}")
         print(f"Directional P&L:             ${self.total_directional_pnl:,.2f}")
@@ -447,7 +484,7 @@ class BacktestResults:
         
         print(f"\n{'RISK METRICS':-^80}")
         print(f"Maximum Drawdown:            {self.max_drawdown:.2f}%")
-        print(f"Sharpe Ratio (annualized):   {self.sharpe_ratio:.2f}")
+        print(f"Sharpe Ratio (annualized):   {self.annualized_sharpe_ratio:.2f}")
         print(f"Number of Rolls:             {len(self.roll_events)}")
         
         print("="*80 + "\n")
@@ -467,6 +504,7 @@ class BacktestResults:
             'Initial Equity': self.initial_equity,
             'Final Equity': self.final_equity,
             'Total Return (%)': self.total_return,
+            'Annualized Return (%)': self.annualized_return,
             'Net P&L': self.net_pnl,
             'Directional P&L': self.total_directional_pnl,
             'Roll P&L': self.total_roll_pnl,
@@ -475,7 +513,9 @@ class BacktestResults:
             'Win Rate (%)': self.win_rate * 100,
             'Profit Factor': self.profit_factor,
             'Max Drawdown (%)': self.max_drawdown,
-            'Sharpe Ratio': self.sharpe_ratio
+            'Sharpe Ratio (Annualized)': self.annualized_sharpe_ratio,
+            'Trading Days': self.trading_days,
+            'Years Traded': self.years_traded
         }
         
         return {
