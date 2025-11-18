@@ -369,6 +369,8 @@ class BacktestResults:
     max_drawdown: float = 0.0
     sharpe_ratio: float = 0.0
     annualized_sharpe_ratio: float = 0.0
+    sortino_ratio: float = 0.0              # NEW
+
     
     # Period tracking
     trading_days: int = 0
@@ -455,6 +457,24 @@ class BacktestResults:
         else:
             self.sharpe_ratio = 0.0
             self.annualized_sharpe_ratio = 0.0
+
+        # NEW: Sortino ratio (downside risk only, annualized)
+        if self.daily_metrics and len(self.daily_metrics) > 1:
+            daily_returns = np.array([
+                m.daily_total_pnl / m.equity if m.equity > 0 else 0
+                for m in self.daily_metrics
+            ])
+            downside = daily_returns[daily_returns < 0]
+
+            if downside.size > 0 and downside.std() > 0:
+                daily_sortino = daily_returns.mean() / downside.std()
+                self.sortino_ratio = daily_sortino * np.sqrt(252)
+            else:
+                # No downside volatility → define Sortino as 0 to be conservative
+                self.sortino_ratio = 0.0
+        else:
+            self.sortino_ratio = 0.0
+
     
     def print_summary(self):
         """Print backtest summary to console"""
@@ -488,7 +508,9 @@ class BacktestResults:
         print(f"\n{'RISK METRICS':-^80}")
         print(f"Maximum Drawdown:            {self.max_drawdown:.2f}%")
         print(f"Sharpe Ratio (annualized):   {self.annualized_sharpe_ratio:.2f}")
+        print(f"Sortino Ratio (annualized):  {self.sortino_ratio:.2f}")   # NEW
         print(f"Number of Rolls:             {len(self.roll_events)}")
+
         
         print("="*80 + "\n")
     
@@ -517,6 +539,7 @@ class BacktestResults:
             'Profit Factor': self.profit_factor,
             'Max Drawdown (%)': self.max_drawdown,
             'Sharpe Ratio (Annualized)': self.annualized_sharpe_ratio,
+            'Sortino Ratio (Annualized)': self.sortino_ratio,   # NEW
             'Trading Days': self.trading_days,
             'Years Traded': self.years_traded
         }

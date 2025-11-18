@@ -51,6 +51,12 @@ from config import (
     CARRY_THRESHOLD_HALF,
     CARRY_THRESHOLD_QUARTER,
     DAYS_BEFORE_FND_TO_ROLL,
+    VOL_LOOKBACK_DAYS,
+    VOL_HIGH_MULTIPLIER,
+    VOL_EXTREME_MULTIPLIER,
+    VOL_RISK_REDUCTION,
+    SUSPEND_TRADING_IN_EXTREME,
+    MAX_DRAWDOWN_STOP,
     BACKTEST_START,
     BACKTEST_END,
     INITIAL_EQUITY,
@@ -212,13 +218,38 @@ def generate_signals(data, backtest_start, window_days=504):
     print("GENERATING TRADING SIGNALS (3-FACTOR REGRESSION)")
     print("="*80)
     print(f"\nRegression window: {window_days} days (~{window_days/252:.1f} years)")
-    print(f"Signal threshold: ±{SIGNAL_THRESHOLD}%")
+    print(f"Signal threshold: ±{SIGNAL_THRESHOLD}")
     print(f"Generating signals from: {backtest_start}")
     
     # Prepare features and target
     feature_cols = ['DXY_logret', 'PMI_change', 'STOCKS_logret']
     target_col = 'HG1_logret'
-    
+
+    # -----------------------------------------------------------------------
+    # NEW (Part B): Volatility regime classification
+    # -----------------------------------------------------------------------
+    # Daily realised volatility
+    realized_vol = data[target_col].rolling(VOL_LOOKBACK_DAYS).std()
+
+    backtest_start_idx = data[data['Date'] >= backtest_start].index[0]
+    long_run_vol_daily = realized_vol.iloc[:backtest_start_idx].mean()
+
+    # Store for diagnostics if you like
+    data['Realized_Vol_Daily'] = realized_vol
+    data['Realized_Vol_Ann']   = realized_vol * np.sqrt(252)  # purely informational
+
+    # Vol regime in *daily* units
+    data['Vol_Regime'] = 'NORMAL'
+    high_mask    = data['Realized_Vol_Daily'] > VOL_HIGH_MULTIPLIER    * long_run_vol_daily
+    extreme_mask = data['Realized_Vol_Daily'] > VOL_EXTREME_MULTIPLIER * long_run_vol_daily
+
+    data.loc[high_mask,    'Vol_Regime'] = 'HIGH'
+    data.loc[extreme_mask, 'Vol_Regime'] = 'EXTREME'
+
+    print("\n[Volatility Regime Distribution in training+backtest]:")
+    print(data['Vol_Regime'].value_counts(dropna=False))
+
+
     # Initialize columns for results
     data['Forecasted_Return'] = np.nan
     data['Signal'] = None  # Use None to distinguish unprocessed rows
@@ -227,9 +258,6 @@ def generate_signals(data, backtest_start, window_days=504):
     data['Model_Beta_PMI'] = np.nan
     data['Model_Beta_STOCKS'] = np.nan
     data['Model_R2'] = np.nan
-    
-    # Find index where backtest starts
-    backtest_start_idx = data[data['Date'] >= backtest_start].index[0]
     
     print(f"\nTraining period ends at index: {backtest_start_idx - 1} ({data.loc[backtest_start_idx - 1, 'Date'].date()})")
     print(f"Signal generation starts at index: {backtest_start_idx} ({data.loc[backtest_start_idx, 'Date'].date()})")
@@ -745,27 +773,34 @@ def apply_carry_filter(signal, carry_spread):
         
         NEUTRAL: multiplier = 0.0
     """
-    if signal == SignalType.NEUTRAL.value:
+    # normalise to string
+    if isinstance(signal, SignalType):
+        sig = signal.value
+    else:
+        sig = str(signal)
+
+    if sig == SignalType.NEUTRAL.value:
         return 0.0
-    
-    elif signal == SignalType.LONG.value:
+
+    if sig == SignalType.LONG.value:
         # LONG hurt by contango (positive spread)
         if carry_spread <= CARRY_THRESHOLD_HALF:
-            return 1.0  # Full position
+            return 1.0
         elif carry_spread <= CARRY_THRESHOLD_QUARTER:
-            return 0.5  # Half position
+            return 0.5
         else:
-            return 0.25  # Quarter position
-    
-    elif signal == SignalType.SHORT.value:
+            return 0.25
+
+    if sig == SignalType.SHORT.value:
         # SHORT hurt by backwardation (negative spread)
         if carry_spread >= -CARRY_THRESHOLD_HALF:
-            return 1.0  # Full position
+            return 1.0
         elif carry_spread >= -CARRY_THRESHOLD_QUARTER:
-            return 0.5  # Half position
+            return 0.5
         else:
-            return 0.25  # Quarter position
-    
+            return 0.25
+
+    # fallback
     return 0.0
 
 
@@ -1041,59 +1076,55 @@ def determine_action(current_status, new_signal, carry_multiplier):
     
     Args:
         current_status: PositionStatus (FLAT, LONG, SHORT)
-        new_signal: SignalType (LONG, SHORT, NEUTRAL)
+        new_signal: SignalType or str ("LONG", "SHORT", "NEUTRAL")
         carry_multiplier: float (0.0 if stand aside)
-    
-    Returns:
-        str: Action to take
-            - "HOLD" (no change)
-            - "OPEN_LONG" (enter long)
-            - "OPEN_SHORT" (enter short)
-            - "CLOSE_LONG" (exit long)
-            - "CLOSE_SHORT" (exit short)
-            - "REVERSE_TO_LONG" (close short + open long)
-            - "REVERSE_TO_SHORT" (close long + open short)
     """
+
+    # --- normalise new_signal to a plain string -----------------------------
+    if isinstance(new_signal, SignalType):
+        ns = new_signal.value
+    else:
+        ns = str(new_signal)
+
     # If carry filter says stand aside, treat as NEUTRAL
     if carry_multiplier == 0.0:
-        new_signal = SignalType.NEUTRAL.value
-    
-    # FLAT (no position)
+        ns = SignalType.NEUTRAL.value
+
+    # ----------------------- FLAT (no position) -----------------------------
     if current_status == PositionStatus.FLAT:
-        if new_signal == SignalType.LONG.value:
+        if ns == SignalType.LONG.value:
             return "OPEN_LONG"
-        elif new_signal == SignalType.SHORT.value:
+        elif ns == SignalType.SHORT.value:
             return "OPEN_SHORT"
         else:
             return "HOLD"
-    
-    # LONG position
-    elif current_status == PositionStatus.LONG:
-        if new_signal == SignalType.LONG.value:
+
+    # ----------------------- LONG position ---------------------------------
+    if current_status == PositionStatus.LONG:
+        if ns == SignalType.LONG.value:
             return "HOLD"
-        elif new_signal == SignalType.NEUTRAL.value:
+        elif ns == SignalType.NEUTRAL.value:
             return "CLOSE_LONG"
-        elif new_signal == SignalType.SHORT.value:
-            # Check if we can reverse
+        elif ns == SignalType.SHORT.value:
             if carry_multiplier > 0:
                 return "REVERSE_TO_SHORT"
             else:
                 return "CLOSE_LONG"
-    
-    # SHORT position
-    elif current_status == PositionStatus.SHORT:
-        if new_signal == SignalType.SHORT.value:
+
+    # ----------------------- SHORT position --------------------------------
+    if current_status == PositionStatus.SHORT:
+        if ns == SignalType.SHORT.value:
             return "HOLD"
-        elif new_signal == SignalType.NEUTRAL.value:
+        elif ns == SignalType.NEUTRAL.value:
             return "CLOSE_SHORT"
-        elif new_signal == SignalType.LONG.value:
-            # Check if we can reverse
+        elif ns == SignalType.LONG.value:
             if carry_multiplier > 0:
                 return "REVERSE_TO_LONG"
             else:
                 return "CLOSE_SHORT"
-    
+
     return "HOLD"
+
 
 
 def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
@@ -1119,9 +1150,16 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
     
     # Initialize state variables
     equity = initial_equity
+    peak_equity = equity                    # NEW: track running peak
+    current_drawdown = 0.0                  # NEW: initialise drawdown
+    baseline_risk_percent = RISK_PERCENT    # NEW: base risk per trade
     position_status = PositionStatus.FLAT
     current_position = None
     current_m2_contract = None
+
+    print(f"Initial Equity: ${equity:,.2f}")
+    print(f"Risk per trade: {RISK_PERCENT*100}%")
+    print(f"ATR Stop Multiplier: {ATR_STOP_MULTIPLIER}x")
     
     # Counters
     trade_id_counter = 1
@@ -1142,7 +1180,40 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
         current_date = row['Date']
         current_signal = row['Signal']
         forecasted_return = row['Forecasted_Return']
-        
+
+        # ---------------------------------------------------------------
+        # NEW (Part B): portfolio drawdown kill-switch
+        # ---------------------------------------------------------------
+        if equity > peak_equity:
+            peak_equity = equity
+            
+        current_drawdown = (equity - peak_equity) / peak_equity  # <= 0 when below peak
+
+        if current_drawdown <= -MAX_DRAWDOWN_STOP:
+            # After a large drawdown we stop opening new positions
+            # We still allow existing positions to be managed/closed.
+            current_signal = SignalType.NEUTRAL.value
+
+        # ---------------------------------------------------------------
+        # NEW (Part B): volatility-regime-based risk adjustment
+        # ---------------------------------------------------------------
+        vol_regime = row.get('Vol_Regime', 'NORMAL')
+
+        # Start with baseline risk per trade
+        risk_percent = baseline_risk_percent
+
+        if vol_regime == 'HIGH':
+            # Cut risk (e.g. 1% -> 0.5%) in high-vol environments
+            risk_percent *= VOL_RISK_REDUCTION
+
+        elif vol_regime == 'EXTREME':
+            if SUSPEND_TRADING_IN_EXTREME:
+                # Don’t open new positions in extreme volatility regimes
+                current_signal = SignalType.NEUTRAL.value
+            else:
+                # If you choose not to suspend, at least crush the risk
+                risk_percent *= VOL_RISK_REDUCTION * 0.5
+
         # Progress indicator
         if idx % 20 == 0:
             pct = (idx / len(signal_data)) * 100
@@ -1436,7 +1507,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                 # If reversing, open new position in opposite direction at settlement
                 if action == "REVERSE_TO_LONG":
                     # Calculate position size for new long
-                    num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
+                    num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier, risk_percent=risk_percent)   #NEW
                     
                     if num_contracts > 0:
                         stop_price = calculate_stop_loss(m2_settlement, m2_atr_yesterday, "LONG")
@@ -1468,7 +1539,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                 
                 elif action == "REVERSE_TO_SHORT":
                     # Calculate position size for new short
-                    num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
+                    num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier, risk_percent=risk_percent)   #NEW
                     
                     if num_contracts > 0:
                         stop_price = calculate_stop_loss(m2_settlement, m2_atr_yesterday, "SHORT")
@@ -1516,7 +1587,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
             # Execute entry trades only if we're flat - enter at settlement (end of day)
             if action == "OPEN_LONG":
                 # Calculate position size using YESTERDAY's ATR (known before market open)
-                num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
+                num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier, risk_percent=risk_percent)   #NEW
                 
                 if num_contracts > 0:
                     stop_price = calculate_stop_loss(m2_settlement, m2_atr_yesterday, "LONG")
@@ -1547,7 +1618,7 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
                     entry_direction = "LONG"
             
             elif action == "OPEN_SHORT":
-                num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier)
+                num_contracts = calculate_position_size(equity, m2_atr_yesterday, carry_multiplier, risk_percent=risk_percent)   #NEW
                 
                 if num_contracts > 0:
                     stop_price = calculate_stop_loss(m2_settlement, m2_atr_yesterday, "SHORT")
@@ -2075,16 +2146,21 @@ def run_single_backtest(period_name, backtest_start, backtest_end, initial_equit
     print("="*80)
     print(f"\nOutput is being saved to: {log_filename}")
     
-    # Calculate how far back we need to load data
-    # Need 504 trading days (~2 years) before backtest start
-    # 504 trading days ≈ 720 calendar days (accounting for weekends/holidays)
+    # ----------------------------------------------------------------------
+    # Calculate how far back we need to load data based on REGRESSION_WINDOW_DAYS
+    # ----------------------------------------------------------------------
     backtest_start_date = pd.to_datetime(backtest_start)
-    data_start_date = backtest_start_date - timedelta(days=750)  # Extra buffer
+
+    # Each trading year ~252 days. 756 trading days ≈ 3 years.
+    # Use 1.5x as a cushion to account for weekends/holidays/NaNs.
+    lookback_calendar_days = int(REGRESSION_WINDOW_DAYS * 1.5)  # e.g. 756 * 1.5 = 1134 days
+
+    data_start_date = backtest_start_date - timedelta(days=lookback_calendar_days)
     DATA_START = data_start_date.strftime('%Y-%m-%d')
-    
+
     print(f"\nBacktest Period: {backtest_start} to {backtest_end}")
     print(f"Data Loading Period: {DATA_START} to {backtest_end}")
-    print(f"  (Need ~2 years of history for rolling regression)")
+    print(f"  (Need ~{REGRESSION_WINDOW_DAYS/252:.1f} years of history for rolling regression)")
     print(f"Initial Equity: ${initial_equity:,.0f}")
     
     # Step 1: Load and preprocess data (includes training period)
@@ -2230,7 +2306,7 @@ if __name__ == "__main__":
     print(" " * 25 + "STRATEGY PARAMETERS USED")
     print("="*80)
     print(f"\n{'Signal Generation:':<40}")
-    print(f"   Signal Threshold:                    ±{SIGNAL_THRESHOLD}%")
+    print(f"   Signal Threshold:                    ±{SIGNAL_THRESHOLD}")
     print(f"   Regression Window:                   {REGRESSION_WINDOW_DAYS} days (~{REGRESSION_WINDOW_DAYS/252:.1f} years)")
     print(f"\n{'Risk Management:':<40}")
     print(f"   ATR Period:                          {ATR_PERIOD} days")

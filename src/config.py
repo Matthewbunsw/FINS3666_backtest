@@ -53,15 +53,15 @@ TOTAL_TRANSACTION_COST = COMMISSION + SLIPPAGE  # $32.50 per contract
 # ============================================================================
 
 # Signal thresholds
-SIGNAL_THRESHOLD = 0.1  # ±0.1% forecasted return threshold
+SIGNAL_THRESHOLD = 0.15  # ±0.1% forecasted return threshold
 
 # Regression parameters
-REGRESSION_WINDOW_DAYS = 504 # 2 years of trading days (~252 days/year)
+REGRESSION_WINDOW_DAYS = 850 # 1 year of trading days (Part B modification)
 
 # Risk management
 ATR_PERIOD = 14  # Days for ATR calculation
 ATR_STOP_MULTIPLIER = 1.5  # Stop distance = 1.5 × ATR
-RISK_PERCENT = 0.01  # Risk 1% of equity per trade
+RISK_PERCENT = 0.015  # Risk 1% of equity per trade
 
 # Trailing stop settings
 TRAILING_STOP_ENABLED = True  # Enable trailing stop (as per trading plan)
@@ -79,6 +79,29 @@ CARRY_THRESHOLD_QUARTER = 0.02  # Quarter position if spread exceeds this
 # Roll management
 DAYS_BEFORE_FND_TO_ROLL = 5  # Exit 5 trading days before First Notice Day
 
+# ============================================================================
+# VOLATILITY REGIME FILTER (for Part B refinements)
+# ============================================================================
+
+# Rolling window to estimate realized volatility of HG daily returns
+VOL_LOOKBACK_DAYS = 20          # 1 trading month
+
+# Define what "high" and "extreme" volatility mean, relative to long-run vol
+VOL_HIGH_MULTIPLIER = 2.0       # high-vol regime if > 2x normal vol
+VOL_EXTREME_MULTIPLIER = 3.0    # extreme-vol regime if > 3x normal vol
+
+# How much to reduce risk in high-vol regime
+VOL_RISK_REDUCTION = 0.5        # cut risk per trade in half
+
+# If True, don't open new positions when volatility is extreme
+SUSPEND_TRADING_IN_EXTREME = True
+
+# ============================================================================
+# PORTFOLIO-LEVEL RISK OVERLAY
+# ============================================================================
+
+# If equity drawdown from peak exceeds this, stop opening new trades
+MAX_DRAWDOWN_STOP = 0.05        # 5% portfolio drawdown kill-switch
 
 # ============================================================================
 # BACKTEST SETTINGS
