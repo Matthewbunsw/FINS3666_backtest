@@ -1,17 +1,17 @@
 ,0
 Initial Equity,10000000.0
-Final Equity,10232070.0
-Total Return (%),2.3206999999999978
-Annualized Return (%),3.2825211139854593
-Net P&L,232069.99999999997
-Directional P&L,256249.9999999999
-Roll P&L,-51999.999999999825
-Transaction Costs,24180.0
-Total Trades,46.0
-Win Rate (%),60.86956521739131
-Profit Factor,1.3374042250039981
-Max Drawdown (%),4.543367826539382
-Sharpe Ratio (Annualized),0.23097832722885514
-Sortino Ratio (Annualized),0.08234461763392359
+Final Equity,10760665.0
+Total Return (%),7.606650000000004
+Annualized Return (%),10.872483751840356
+Net P&L,760665.0
+Directional P&L,790500.0
+Roll P&L,-58000.00000000028
+Transaction Costs,29835.0
+Total Trades,42.0
+Win Rate (%),64.28571428571429
+Profit Factor,4.000354994576475
+Max Drawdown (%),0.6353058093648389
+Sharpe Ratio (Annualized),2.357379587776178
+Sortino Ratio (Annualized),2.467259347044743
 Trading Days,179.0
 Years Traded,0.7103174603174603

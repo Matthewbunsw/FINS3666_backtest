@@ -938,6 +938,120 @@ def check_stop_loss(current_price, stop_price, direction):
 
 
 # ============================================================================
+# PHASE 3B: RISK SCANNERS (Circuit Breakers)
+# ============================================================================
+
+def check_atr_spike(contract_data, current_date, current_contract):
+    """
+    Scanner 2: ATR Change Detection
+    
+    Triggers when 5-day ATR / 100-day ATR > 2.5.
+    Indicates volatility regime shift.
+    
+    Args:
+        contract_data: Dictionary of contract DataFrames
+        current_date: Date to check
+        current_contract: Contract code (e.g., "HGK25")
+    
+    Returns:
+        dict: {'triggered': bool, 'position_scalar': float, 'rationale': str}
+    """
+    if current_contract not in contract_data:
+        return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'No data'}
+    
+    df = contract_data[current_contract]
+    df = df[df['Date'] <= current_date].copy()
+    
+    if len(df) < 100:
+        return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'Insufficient history'}
+    
+    # Check if ATR column exists
+    if 'ATR' not in df.columns:
+        return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'No ATR data'}
+    
+    # Calculate 5-day and 100-day ATR
+    atr_5d = df['ATR'].iloc[-5:].mean()
+    atr_100d = df['ATR'].iloc[-100:].mean()
+    
+    if atr_100d == 0:
+        return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'ATR undefined'}
+    
+    atr_ratio = atr_5d / atr_100d
+    
+    # Trigger if ATR ratio > 2.5
+    if atr_ratio > 2.0:
+        return {
+            'triggered': True,
+            'position_scalar': 0.0,  # Flatten position
+            'rationale': f'ATR spike: {atr_ratio:.2f}x baseline'
+        }
+    
+    return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'ATR normal'}
+
+
+def check_structure_shock(contract_data, current_date, m1_contract, m2_contract):
+    """
+    Scanner 3: Structure of Market Shock
+    
+    Triggers when (M2-M1 spread - 30d avg) / std > 4 standard deviations.
+    Indicates severe supply/demand dislocation.
+    
+    Args:
+        contract_data: Dictionary of contract DataFrames
+        current_date: Date to check
+        m1_contract: Front month contract code
+        m2_contract: Second month contract code
+    
+    Returns:
+        dict: {'triggered': bool, 'position_scalar': float, 'rationale': str}
+    """
+    if m1_contract not in contract_data or m2_contract not in contract_data:
+        return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'No data'}
+    
+    df_m1 = contract_data[m1_contract]
+    df_m2 = contract_data[m2_contract]
+    
+    df_m1 = df_m1[df_m1['Date'] <= current_date].copy()
+    df_m2 = df_m2[df_m2['Date'] <= current_date].copy()
+    
+    if len(df_m1) < 30 or len(df_m2) < 30:
+        return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'Insufficient history'}
+    
+    # Align dates using merge
+    df_merged = df_m1[['Date', 'Settlement']].merge(
+        df_m2[['Date', 'Settlement']], on='Date', suffixes=('_m1', '_m2')
+    )
+    
+    if len(df_merged) < 30:
+        return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'Insufficient common dates'}
+    
+    # Calculate M2-M1 spread
+    spread = df_merged['Settlement_m2'] - df_merged['Settlement_m1']
+    
+    # Get last 30 days
+    spread_30d = spread.iloc[-30:]
+    current_spread = spread.iloc[-1]
+    
+    # Calculate z-score
+    mean_spread = spread_30d.mean()
+    std_spread = spread_30d.std()
+    
+    if std_spread == 0:
+        return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'No spread volatility'}
+    
+    z_score = (current_spread - mean_spread) / std_spread
+    
+    # Trigger if |z-score| > 4
+    if abs(z_score) > 3:
+        return {
+            'triggered': True,
+            'position_scalar': 0.0,  # Flatten position
+            'rationale': f'Structure shock: z-score={z_score:.2f}'
+        }
+    
+    return {'triggered': False, 'position_scalar': 1.0, 'rationale': 'Structure normal'}
+
+# ============================================================================
 # PHASE 4: ROLL MANAGEMENT
 # ============================================================================
 
@@ -1280,6 +1394,83 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
         
         # Calculate carry spread (needed for both entry and exit logic)
         carry_spread = calculate_carry_spread(m2_settlement, m3_settlement)
+        
+        # ====================================================================
+        # 2. RISK SCANNER CHECKS (Circuit Breakers)
+        # ====================================================================
+        # Run all four risk scanners to detect abnormal market conditions
+        m1_contract = contracts['M1']
+        
+        scanner_results = {
+            'atr': check_atr_spike(contract_data, current_date, m2_contract),
+            'structure': check_structure_shock(contract_data, current_date, m1_contract, m2_contract),
+        }
+        
+        # Aggregate scanner results
+        any_scanner_triggered = any(s['triggered'] for s in scanner_results.values())
+        
+        # If any scanner triggers, flatten position immediately
+        if any_scanner_triggered and current_position is not None:
+            # Log which scanners triggered
+            triggered_scanners = [name for name, result in scanner_results.items() if result['triggered']]
+            rationale = "; ".join([scanner_results[name]['rationale'] for name in triggered_scanners])
+            
+            # Close position at settlement price
+            exit_action = "CLOSE_LONG" if "LONG" in current_position.entry_trade.action else "CLOSE_SHORT"
+            
+            exit_trade = Trade(
+                trade_id=trade_id_counter,
+                date=current_date,
+                action=exit_action,
+                contract_code=current_m2_contract,
+                price=m2_settlement,
+                num_contracts=current_position.entry_trade.num_contracts
+            )
+            trade_id_counter += 1
+            
+            current_position.exit_trade = exit_trade
+            current_position.exit_reason = f"RISK_SCANNER: {rationale}"
+            current_position.calculate_pnl()
+            results.positions.append(current_position)
+            
+            realized_pnl_today = current_position.net_pnl
+            equity += current_position.net_pnl
+            
+            # Reset state
+            position_status = PositionStatus.FLAT
+            current_position = None
+            entry_price = None
+            entry_direction = None
+            
+            # Log daily metrics with scanner status
+            daily_metric = DailyMetrics(
+                date=current_date,
+                position_status=position_status,
+                num_contracts=0,
+                current_price=m2_settlement,
+                signal=current_signal,
+                forecasted_return=forecasted_return,
+                atr=m2_atr,
+                stop_loss=None,
+                carry_spread=carry_spread,
+                carry_multiplier=0.0,
+                atr_scanner_triggered=scanner_results['atr']['triggered'],
+                structure_scanner_triggered=scanner_results['structure']['triggered'],
+                any_scanner_triggered=any_scanner_triggered,
+                unrealized_pnl=0.0,
+                realized_pnl=realized_pnl_today,
+                roll_pnl=0.0,
+                daily_total_pnl=realized_pnl_today,
+                cumulative_pnl=equity - initial_equity,
+                equity=equity
+            )
+            results.daily_metrics.append(daily_metric)
+            
+            continue  # Skip to next day after scanner-triggered exit
+        
+        # If scanners triggered but no position held, block new entries
+        if any_scanner_triggered:
+            current_signal = SignalType.NEUTRAL.value
         
         # ====================================================================
         # PATH A: POSITION HELD - CHECK EXIT CRITERIA
@@ -1673,6 +1864,9 @@ def run_backtest(signal_data, contract_data, fnd_calendar, initial_equity):
             stop_loss=current_position.current_stop if current_position else None,  # Use current trailing stop
             carry_spread=carry_spread,
             carry_multiplier=carry_multiplier if 'carry_multiplier' in locals() else 0.0,
+            atr_scanner_triggered=scanner_results['atr']['triggered'] if 'scanner_results' in locals() else False,
+            structure_scanner_triggered=scanner_results['structure']['triggered'] if 'scanner_results' in locals() else False,
+            any_scanner_triggered=any_scanner_triggered if 'any_scanner_triggered' in locals() else False,
             unrealized_pnl=unrealized_pnl,
             realized_pnl=realized_pnl_today,
             roll_pnl=roll_pnl_today,

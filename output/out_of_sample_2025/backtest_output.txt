@@ -9,8 +9,8 @@
 Output is being saved to: output/out_of_sample_2025/backtest_output.txt
 
 Backtest Period: 2025-01-02 to 2025-10-31
-Data Loading Period: 2021-07-07 to 2025-10-31
-  (Need ~3.4 years of history for rolling regression)
+Data Loading Period: 2022-12-08 to 2025-10-31
+  (Need ~2.0 years of history for rolling regression)
 Initial Equity: $10,000,000
 
 ================================================================================
@@ -36,8 +36,8 @@ LOADING AND PREPROCESSING DATA
    ✓ Date range: 2021-01-04 to 2025-10-31
 
 [5/5] Merging all datasets...
-   ✓ Merged dataset: 1087 observations
-   ✓ Backtest period: 2021-07-07 to 2025-10-31
+   ✓ Merged dataset: 727 observations
+   ✓ Backtest period: 2022-12-08 to 2025-10-31
    ✓ Features: ['Date', 'HG_Price', 'HG1_logret', 'DXY_Price', 'DXY_logret', 'PMI', 'PMI_change', 'LME_Stocks', 'STOCKS_logret']
 
 [DATA QUALITY CHECK]
@@ -55,26 +55,27 @@ LOADING AND PREPROCESSING DATA
 ================================================================================
 
 [DATA AVAILABILITY CHECK]
-   Days loaded: 1087
-   Days needed for regression: 850
+   Days loaded: 727
+   Days needed for regression: 504
    ✓ Sufficient data available
 
 ================================================================================
 GENERATING TRADING SIGNALS (3-FACTOR REGRESSION)
 ================================================================================
 
-Regression window: 850 days (~3.4 years)
-Signal threshold: ±0.15
+Regression window: 504 days (~2.0 years)
+Signal threshold: ±0.16
 Generating signals from: 2025-01-02
 
 [Volatility Regime Distribution in training+backtest]:
-NORMAL     1048
-EXTREME      20
-HIGH         19
-Name: Vol_Regime, dtype: int64
+Vol_Regime
+NORMAL     677
+HIGH        30
+EXTREME     20
+Name: count, dtype: int64
 
-Training period ends at index: 877 (2024-12-31)
-Signal generation starts at index: 878 (2025-01-02)
+Training period ends at index: 517 (2024-12-31)
+Signal generation starts at index: 518 (2025-01-02)
 Total signals to generate: 209
 
 Running rolling regression...
@@ -83,22 +84,22 @@ Running rolling regression...
    ✓ Generated 209 trading signals
 
 [SIGNAL DISTRIBUTION]
-   LONG:      62 ( 29.7%)
+   LONG:      89 ( 42.6%)
    SHORT:     19 (  9.1%)
-   NEUTRAL:  128 ( 61.2%)
+   NEUTRAL:  101 ( 48.3%)
    TOTAL:    209 (100.0%)
 
 [MODEL STATISTICS]
-   Average R²: 0.0401
-   Median R²:  0.0396
-   Average |Forecast|: 0.1537%
-   Max forecast: +0.7567%
-   Min forecast: -0.9472%
+   Average R²: 0.0508
+   Median R²:  0.0524
+   Average |Forecast|: 0.2046%
+   Max forecast: +0.9327%
+   Min forecast: -1.4878%
 
 [AVERAGE BETA COEFFICIENTS]
-   β₁ (DXY):    -0.106146
-   β₂ (PMI):    +0.017094
-   β₃ (STOCKS): -0.097275
+   β₁ (DXY):    -0.126402
+   β₂ (PMI):    +0.141125
+   β₃ (STOCKS): -0.119187
 
 [CORRELATION MATRIX]
 
@@ -143,52 +144,52 @@ LOADING CONTRACT DATABASE
 ================================================================================
 
 [Loading HGF24]
-   ✓ Loaded 310 observations
-   ✓ Date range: 2022-11-02 to 2024-01-29
+   ✓ Loaded 285 observations
+   ✓ Date range: 2022-12-08 to 2024-01-29
 
 [Loading HGG24]
-   ✓ Loaded 330 observations
-   ✓ Date range: 2022-11-02 to 2024-02-27
+   ✓ Loaded 305 observations
+   ✓ Date range: 2022-12-08 to 2024-02-27
 
 [Loading HGH24]
-   ✓ Loaded 350 observations
-   ✓ Date range: 2022-11-02 to 2024-03-26
+   ✓ Loaded 325 observations
+   ✓ Date range: 2022-12-08 to 2024-03-26
 
 [Loading HGJ24]
-   ✓ Loaded 372 observations
-   ✓ Date range: 2022-11-02 to 2024-04-26
+   ✓ Loaded 347 observations
+   ✓ Date range: 2022-12-08 to 2024-04-26
 
 [Loading HGK24]
-   ✓ Loaded 394 observations
-   ✓ Date range: 2022-11-02 to 2024-05-29
+   ✓ Loaded 369 observations
+   ✓ Date range: 2022-12-08 to 2024-05-29
 
 [Loading HGM24]
-   ✓ Loaded 413 observations
-   ✓ Date range: 2022-11-02 to 2024-06-26
+   ✓ Loaded 388 observations
+   ✓ Date range: 2022-12-08 to 2024-06-26
 
 [Loading HGN24]
-   ✓ Loaded 435 observations
-   ✓ Date range: 2022-11-02 to 2024-07-29
+   ✓ Loaded 410 observations
+   ✓ Date range: 2022-12-08 to 2024-07-29
 
 [Loading HGQ24]
-   ✓ Loaded 457 observations
-   ✓ Date range: 2022-11-02 to 2024-08-28
+   ✓ Loaded 432 observations
+   ✓ Date range: 2022-12-08 to 2024-08-28
 
 [Loading HGU24]
-   ✓ Loaded 477 observations
-   ✓ Date range: 2022-11-02 to 2024-09-26
+   ✓ Loaded 452 observations
+   ✓ Date range: 2022-12-08 to 2024-09-26
 
 [Loading HGV24]
-   ✓ Loaded 500 observations
-   ✓ Date range: 2022-11-02 to 2024-10-29
+   ✓ Loaded 475 observations
+   ✓ Date range: 2022-12-08 to 2024-10-29
 
 [Loading HGX24]
-   ✓ Loaded 502 observations
-   ✓ Date range: 2022-11-29 to 2024-11-26
+   ✓ Loaded 495 observations
+   ✓ Date range: 2022-12-08 to 2024-11-26
 
 [Loading HGZ24]
-   ✓ Loaded 541 observations
-   ✓ Date range: 2022-11-02 to 2024-12-27
+   ✓ Loaded 516 observations
+   ✓ Date range: 2022-12-08 to 2024-12-27
 
 [Loading HGF25]
    ✓ Loaded 502 observations
@@ -199,8 +200,8 @@ LOADING CONTRACT DATABASE
    ✓ Date range: 2023-02-27 to 2025-02-26
 
 [Loading HGH25]
-   ✓ Loaded 601 observations
-   ✓ Date range: 2022-11-02 to 2025-03-27
+   ✓ Loaded 576 observations
+   ✓ Date range: 2022-12-08 to 2025-03-27
 
 [Loading HGJ25]
    ✓ Loaded 502 observations
@@ -215,16 +216,16 @@ LOADING CONTRACT DATABASE
    ✓ Date range: 2023-06-29 to 2025-06-26
 
 [Loading HGN25]
-   ✓ Loaded 685 observations
-   ✓ Date range: 2022-11-02 to 2025-07-29
+   ✓ Loaded 660 observations
+   ✓ Date range: 2022-12-08 to 2025-07-29
 
 [Loading HGQ25]
    ✓ Loaded 500 observations
    ✓ Date range: 2023-08-30 to 2025-08-27
 
 [Loading HGU25]
-   ✓ Loaded 727 observations
-   ✓ Date range: 2022-11-02 to 2025-09-26
+   ✓ Loaded 702 observations
+   ✓ Date range: 2022-12-08 to 2025-09-26
 
 [Loading HGV25]
    ✓ Loaded 502 observations
@@ -235,8 +236,8 @@ LOADING CONTRACT DATABASE
    ✓ Date range: 2023-11-29 to 2025-10-31
 
 [Loading HGZ25]
-   ✓ Loaded 752 observations
-   ✓ Date range: 2022-11-02 to 2025-10-31
+   ✓ Loaded 727 observations
+   ✓ Date range: 2022-12-08 to 2025-10-31
 
 ✓ Total contracts loaded: 24
 ================================================================================
@@ -248,19 +249,19 @@ LOADING CONTRACT DATABASE
 RUNNING BACKTEST SIMULATION
 ================================================================================
 Initial Equity: $10,000,000.00
-Risk per trade: 1.5%
+Risk per trade: 1.7999999999999998%
 ATR Stop Multiplier: 1.5x
 
 Starting simulation...
 Initial Equity: $10,000,000.00
-Risk per trade: 1.5%
+Risk per trade: 1.7999999999999998%
 ATR Stop Multiplier: 1.5x
-   Progress: 0.0% (0/209 days) | Equity: $10,000,000   Progress: 9.6% (20/209 days) | Equity: $10,070,660   Progress: 19.1% (40/209 days) | Equity: $10,220,925   Progress: 28.7% (60/209 days) | Equity: $10,265,790   Progress: 38.3% (80/209 days) | Equity: $10,189,735   Progress: 47.8% (100/209 days) | Equity: $10,218,435   Progress: 57.4% (120/209 days) | Equity: $10,259,725   Progress: 67.0% (140/209 days) | Equity: $9,824,745   Progress: 76.6% (160/209 days) | Equity: $10,159,835   Progress: 86.1% (180/209 days) | Equity: $10,241,850   Progress: 95.7% (200/209 days) | Equity: $10,232,070
+   Progress: 0.0% (0/209 days) | Equity: $10,000,000   Progress: 9.6% (20/209 days) | Equity: $10,085,890   Progress: 19.1% (40/209 days) | Equity: $10,245,080   Progress: 28.7% (60/209 days) | Equity: $10,354,910   Progress: 38.3% (80/209 days) | Equity: $10,339,090   Progress: 47.8% (100/209 days) | Equity: $10,388,780   Progress: 57.4% (120/209 days) | Equity: $10,442,440   Progress: 67.0% (140/209 days) | Equity: $10,543,440   Progress: 76.6% (160/209 days) | Equity: $10,542,855   Progress: 86.1% (180/209 days) | Equity: $10,667,725   Progress: 95.7% (200/209 days) | Equity: $10,761,315
 
 ✓ Backtest simulation complete!
-   Total positions: 46
+   Total positions: 42
    Total rolls: 7
-   Final equity: $10,232,070.00
+   Final equity: $10,760,665.00
 ================================================================================
 
 ================================================================================
@@ -273,31 +274,31 @@ BACKTEST SUMMARY - HG Copper Futures Strategy
 
 ----------------------------------PERFORMANCE-----------------------------------
 Initial Equity:              $10,000,000.00
-Final Equity:                $10,232,070.00
-Total Return:                2.32%
-Annualized Return:           3.28%
-Net P&L:                     $232,070.00
+Final Equity:                $10,760,665.00
+Total Return:                7.61%
+Annualized Return:           10.87%
+Net P&L:                     $760,665.00
 Trading Period:              179 days (0.71 years)
 
 ---------------------------------P&L BREAKDOWN----------------------------------
-Directional P&L:             $256,250.00
-Roll P&L:                    $-52,000.00
-Transaction Costs:           -$24,180.00
+Directional P&L:             $790,500.00
+Roll P&L:                    $-58,000.00
+Transaction Costs:           -$29,835.00
   (Commission + Slippage @ $32.5/contract)
 
 --------------------------------TRADE STATISTICS--------------------------------
-Total Trades:                46
-Winning Trades:              28
-Losing Trades:               18
-Win Rate:                    60.87%
-Average Win:                 $32,852.86
-Average Loss:                $-38,211.67
-Profit Factor:               1.34
+Total Trades:                42
+Winning Trades:              27
+Losing Trades:               15
+Win Rate:                    64.29%
+Average Win:                 $37,562.59
+Average Loss:                $-16,901.67
+Profit Factor:               4.00
 
 ----------------------------------RISK METRICS----------------------------------
-Maximum Drawdown:            4.54%
-Sharpe Ratio (annualized):   0.23
-Sortino Ratio (annualized):  0.08
+Maximum Drawdown:            0.64%
+Sharpe Ratio (annualized):   2.36
+Sortino Ratio (annualized):  2.47
 Number of Rolls:             7
 ================================================================================
 
@@ -315,14 +316,14 @@ Number of Rolls:             7
 
 [Additional Performance Metrics]
    Total Trading Days: 179
-   Days in Position: 61
-   Days Flat: 118
-   Average Daily Return: 0.0080%
-   Daily Return Std Dev: 0.4200%
-   Best Day: 3.42% on 2025-07-31
-   Worst Day: -4.22% on 2025-07-14
-   Longest Win Streak: 1 days
-   Longest Loss Streak: 23 days
+   Days in Position: 73
+   Days Flat: 106
+   Average Daily Return: 0.0178%
+   Daily Return Std Dev: 0.1200%
+   Best Day: 0.96% on 2025-09-04
+   Worst Day: -0.33% on 2025-05-28
+   Longest Win Streak: 2 days
+   Longest Loss Streak: 29 days
 
 ================================================================================
 

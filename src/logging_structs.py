@@ -297,6 +297,13 @@ class DailyMetrics:
     carry_spread: float = 0.0
     carry_multiplier: float = 1.0
     
+    # Risk scanner status
+    volume_scanner_triggered: bool = False
+    atr_scanner_triggered: bool = False
+    structure_scanner_triggered: bool = False
+    market_risk_scanner_triggered: bool = False
+    any_scanner_triggered: bool = False
+    
     # P&L tracking
     unrealized_pnl: float = 0.0  # Mark-to-market for open positions
     realized_pnl: float = 0.0  # P&L from closed trades today
@@ -320,6 +327,11 @@ class DailyMetrics:
             'stop_loss': self.stop_loss,
             'carry_spread': self.carry_spread,
             'carry_multiplier': self.carry_multiplier,
+            'volume_scanner_triggered': self.volume_scanner_triggered,
+            'atr_scanner_triggered': self.atr_scanner_triggered,
+            'structure_scanner_triggered': self.structure_scanner_triggered,
+            'market_risk_scanner_triggered': self.market_risk_scanner_triggered,
+            'any_scanner_triggered': self.any_scanner_triggered,
             'unrealized_pnl': self.unrealized_pnl,
             'realized_pnl': self.realized_pnl,
             'roll_pnl': self.roll_pnl,
