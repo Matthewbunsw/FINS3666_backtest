@@ -2559,6 +2559,10 @@ if __name__ == "__main__":
             plot_smoking_gun_structure_scanner,
             save_performance_decay_table,
             plot_adaptive_risk_flowchart,
+            plot_equity_curve_comparison,       
+            plot_drawdown_comparison,           
+            plot_daily_return_histogram,        
+            plot_trade_activity_heatmap, 
         )
         from pathlib import Path
 
@@ -2591,6 +2595,33 @@ if __name__ == "__main__":
             refined_oos_folder=PARTB_OOS,
             initial_oos_folder=PARTA_OOS,
             save_path=Path("figures/smoking_gun_structure_scanner.png"),
+        )
+
+        # 5. Equity Curve Overlay
+        plot_equity_curve_comparison(
+        refined_oos_folder=PARTB_OOS,
+        initial_oos_folder=PARTA_OOS,
+        save_path=Path("figures/equity_curve_comparison_2025.png"),
+        )
+
+        # 6. Drawdown Curve Comparison
+        plot_drawdown_comparison(
+            refined_oos_folder=PARTB_OOS,
+            initial_oos_folder=PARTA_OOS,
+            save_path=Path("figures/drawdown_comparison_2025.png"),
+        )
+
+        # 7. Histogram of Daily Returns
+        plot_daily_return_histogram(
+            refined_oos_folder=PARTB_OOS,
+            initial_oos_folder=PARTA_OOS,
+            save_path=Path("figures/daily_return_histogram_2025.png"),
+        )
+
+        # 8. Trade Activity Heatmap
+        plot_trade_activity_heatmap(
+            refined_oos_folder=PARTB_OOS,
+            save_path=Path("figures/trade_activity_heatmap_refined_2025.png"),
         )
 
         print("\nAll assignment visuals generated successfully!")

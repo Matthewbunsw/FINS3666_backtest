@@ -457,3 +457,222 @@ def plot_smoking_gun_structure_scanner(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(save_path, dpi=300)
     plt.close(fig)
+
+# ---------------------------------------------------------------------
+# 5. Equity Curve Overlay
+# ---------------------------------------------------------------------
+
+def plot_equity_curve_comparison(
+    refined_oos_folder: Path,
+    initial_oos_folder: Path,
+    save_path: Path,
+):
+    """
+    Overlay cumulative P&L / equity for initial vs refined model over 2025.
+    """
+
+    dm_ref = pd.read_csv(refined_oos_folder / "daily_metrics.csv",
+                         parse_dates=["date"])
+    dm_init = pd.read_csv(initial_oos_folder / "daily_metrics.csv",
+                          parse_dates=["date"])
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Use cumulative P&L for comparability
+    ax.plot(
+        dm_init["date"],
+        dm_init["cumulative_pnl"],
+        linestyle=":",
+        linewidth=1.2,
+        label="Initial model",
+        color="gray",
+    )
+    ax.plot(
+        dm_ref["date"],
+        dm_ref["cumulative_pnl"],
+        linestyle="-",
+        linewidth=2.0,
+        label="Refined model",
+    )
+
+    ax.set_title("Equity Curve Comparison – Initial vs Refined (2025)")
+    ax.set_ylabel("Cumulative P&L ($)")
+    ax.set_xlabel("Date")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %y"))
+    ax.grid(alpha=0.3)
+    ax.legend()
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=300)
+    plt.close(fig)
+
+# ---------------------------------------------------------------------
+# 6. Drawdown Curve Comparison
+# ---------------------------------------------------------------------
+
+def plot_drawdown_comparison(
+    refined_oos_folder: Path,
+    initial_oos_folder: Path,
+    save_path: Path,
+):
+    """
+    Plot running max drawdown (%) for initial vs refined model.
+    """
+
+    def compute_drawdown(df: pd.DataFrame) -> pd.DataFrame:
+        equity = df["equity"]
+        peak = equity.cummax()
+        drawdown = (equity - peak) / peak * 100.0
+        return pd.DataFrame({"date": df["date"], "drawdown_pct": drawdown})
+
+    dm_ref = pd.read_csv(refined_oos_folder / "daily_metrics.csv",
+                         parse_dates=["date"])
+    dm_init = pd.read_csv(initial_oos_folder / "daily_metrics.csv",
+                          parse_dates=["date"])
+
+    dd_ref = compute_drawdown(dm_ref)
+    dd_init = compute_drawdown(dm_init)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(
+        dd_init["date"],
+        dd_init["drawdown_pct"],
+        linestyle=":",
+        linewidth=1.2,
+        label="Initial model",
+        color="gray",
+    )
+    ax.plot(
+        dd_ref["date"],
+        dd_ref["drawdown_pct"],
+        linestyle="-",
+        linewidth=2.0,
+        label="Refined model",
+    )
+
+    ax.set_title("Maximum Drawdown Over Time – Initial vs Refined (2025)")
+    ax.set_ylabel("Drawdown (%)")
+    ax.set_xlabel("Date")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %y"))
+    ax.grid(alpha=0.3)
+    ax.legend()
+    ax.set_ylim(min(dd_init["drawdown_pct"].min(), dd_ref["drawdown_pct"].min()) - 1, 1)
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=300)
+    plt.close(fig)
+
+# ---------------------------------------------------------------------
+# 7. Histogram of Daily Returns
+# ---------------------------------------------------------------------
+
+def plot_daily_return_histogram(
+    refined_oos_folder: Path,
+    initial_oos_folder: Path,
+    save_path: Path,
+    bins: int = 40,
+):
+    """
+    Compare distribution of daily returns for initial vs refined model.
+    Returns are computed as daily P&L / previous-day equity.
+    """
+
+    def compute_returns(dm: pd.DataFrame) -> pd.Series:
+        dm = dm.sort_values("date").copy()
+        # shift equity to get previous-day equity
+        prev_equity = dm["equity"].shift(1)
+        daily_ret = dm["daily_total_pnl"] / prev_equity
+        return daily_ret.dropna()
+
+    dm_ref = pd.read_csv(refined_oos_folder / "daily_metrics.csv",
+                         parse_dates=["date"])
+    dm_init = pd.read_csv(initial_oos_folder / "daily_metrics.csv",
+                          parse_dates=["date"])
+
+    ret_ref = compute_returns(dm_ref)
+    ret_init = compute_returns(dm_init)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    # Histogram overlay
+    ax.hist(
+        ret_init,
+        bins=bins,
+        alpha=0.5,
+        label="Initial model",
+    )
+    ax.hist(
+        ret_ref,
+        bins=bins,
+        alpha=0.5,
+        label="Refined model",
+    )
+
+    ax.set_title("Distribution of Daily Returns – Initial vs Refined (2025)")
+    ax.set_xlabel("Daily Return")
+    ax.set_ylabel("Frequency")
+    ax.legend()
+    ax.grid(alpha=0.3)
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=300)
+    plt.close(fig)
+
+# ---------------------------------------------------------------------
+# 8. Trade Activity Heatmap
+# ---------------------------------------------------------------------
+
+import numpy as np  # make sure this is imported at top of file
+
+def plot_trade_activity_heatmap(
+    refined_oos_folder: Path,
+    save_path: Path,
+):
+    """
+    Simple 1D heatmap of trading activity for the refined model.
+    Encodes position_status as:
+        -1 = SHORT, 0 = FLAT, 1 = LONG
+    """
+
+    dm_ref = pd.read_csv(refined_oos_folder / "daily_metrics.csv",
+                         parse_dates=["date"])
+
+    status_map = {"SHORT": -1, "FLAT": 0, "LONG": 1}
+    status_vals = dm_ref["position_status"].map(status_map).fillna(0).to_numpy()
+
+    # Make a 2D array with shape (1, n_days) so imshow can plot it
+    heat_data = status_vals.reshape(1, -1)
+
+    fig, ax = plt.subplots(figsize=(10, 2.2))
+    im = ax.imshow(
+        heat_data,
+        aspect="auto",
+        cmap="bwr",          # blue=short, white=flat, red=long
+        vmin=-1,
+        vmax=1,
+    )
+
+    ax.set_yticks([])
+    ax.set_xlabel("Date")
+    ax.set_title("Trade Activity Heatmap – Refined Model (2025)")
+
+    # X-axis ticks
+    ax.set_xticks(np.linspace(0, len(dm_ref) - 1, 6))
+    ax.set_xticklabels(
+        [d.strftime("%b %y") for d in
+         dm_ref["date"].iloc[np.linspace(0, len(dm_ref) - 1, 6).astype(int)]],
+        rotation=0,
+    )
+
+    # Colorbar with labels
+    cbar = plt.colorbar(im, ax=ax, orientation="vertical", pad=0.02)
+    cbar.set_ticks([-1, 0, 1])
+    cbar.set_ticklabels(["Short", "Flat", "Long"])
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=300)
+    plt.close(fig)
