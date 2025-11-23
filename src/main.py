@@ -2548,3 +2548,54 @@ if __name__ == "__main__":
     print("\n" + "="*80)
     print("✅ ALL BACKTESTS COMPLETE")
     print("="*80 + "\n")
+
+# ---------------------------------------------
+# Generate assignment visuals
+# ---------------------------------------------
+if __name__ == "__main__":
+    try:
+        from visuals import (
+            plot_autopsy_july_2025_initial,
+            plot_smoking_gun_structure_scanner,
+            save_performance_decay_table,
+            plot_adaptive_risk_flowchart,
+        )
+        from pathlib import Path
+
+        print("\nGenerating assignment visuals...")
+
+        PARTA_OOS = Path("output_partA/out_of_sample_2025")
+        PARTB_OOS = Path("output/out_of_sample_2025")
+
+        # 1. Autopsy chart (initial model failure)
+        plot_autopsy_july_2025_initial(
+            initial_oos_folder=PARTA_OOS,
+            save_path=Path("figures/autopsy_july2025_initial.png"),
+            band_width=0.20,  # or based on your config
+        )
+
+        # 2. Performance Decay Table (Initial vs Refined 2025)
+        save_performance_decay_table(
+            initial_summary_path=PARTA_OOS / "summary.csv",
+            refined_summary_path=PARTB_OOS / "summary.csv",
+            save_csv_path=Path("figures/performance_decay_2025.csv")
+        )
+
+        # 3. Flowchart
+        plot_adaptive_risk_flowchart(
+            save_path=Path("figures/adaptive_risk_flowchart.png")
+        )
+
+        # 4. Smoking Gun chart
+        plot_smoking_gun_structure_scanner(
+            refined_oos_folder=PARTB_OOS,
+            initial_oos_folder=PARTA_OOS,
+            save_path=Path("figures/smoking_gun_structure_scanner.png"),
+        )
+
+        print("\nAll assignment visuals generated successfully!")
+
+    except Exception as e:
+        print("\n⚠ WARNING: Could not generate assignment visuals.")
+        print(f"Error: {e}")
+
