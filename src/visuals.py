@@ -439,11 +439,12 @@ def plot_smoking_gun_structure_scanner(
         flat_date = dm_ref.loc[first_idx, "date"]
         flat_spread = dm_ref.loc[first_idx, "carry_spread"]
         ax1.annotate(
-            "Structure scanner\nflatten trigger",
+            "Structure scanner flatten trigger",
             xy=(flat_date, flat_spread),
-            xytext=(20, 30),
+            xytext=(0, 55),  # Move text UP
             textcoords="offset points",
             fontsize=8,
+            ha="center",
             arrowprops=dict(arrowstyle="->", lw=1.0),
         )
 
